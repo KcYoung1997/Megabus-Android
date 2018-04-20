@@ -29,7 +29,7 @@ interface CityCallback {
 public class MegabusAPI {
     public static final String baseURL =    "https://uk.megabus.com";
     public static final String originURL =  baseURL+"/journey-planner/api/origin-cities";
-    public static final String destURL =    baseURL+"/journey-planner/api/destination-cities";
+    public static final String destURL(int origin) { return baseURL+"/journey-planner/api/destination-cities?originCityId=" + origin; }
     public static final String journeyURL = baseURL+"/journey-planner/api/journeys";
 
 
@@ -47,13 +47,30 @@ public class MegabusAPI {
             }, new Response.ErrorListener() {
                 @Override
                 public void onErrorResponse(VolleyError error) {
-                    //TODO: Error
+                    callback.onFailure(error);
                 }
         });
-
-// Add the request to the RequestQueue.
+        // Add the request to the RequestQueue.
         queue.add(stringRequest);
     }
-    static public void getDestinations(RequestQueue queue, CityCallback callback) {
+    static public void getDestinations(RequestQueue queue, int origin, final CityCallback callback) {
+        String url = destURL(origin);
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, destURL(origin),
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        // Get Cities Array
+                        JsonArray arr = ((JsonObject)new JsonParser().parse(response)).getAsJsonArray("cities");
+                        // Parse as City List
+                        List<City> destinations = new Gson().fromJson(arr, new TypeToken<List<City>>() {}.getType());
+                        callback.onSuccess(destinations);
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                callback.onFailure(error);
+            }
+        });
+        queue.add(stringRequest);
     }
 }

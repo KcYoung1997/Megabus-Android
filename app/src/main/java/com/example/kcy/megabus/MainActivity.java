@@ -19,6 +19,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.Volley;
@@ -28,6 +29,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -35,19 +37,21 @@ import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.io.IOException;
 import java.util.List;
-
+import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
 
-    Context mainContext;
+    // Location Provider API
+    FusedLocationProviderClient mFusedLocationClient;
+    Button continueButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        mainContext = this.getApplicationContext();
 
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -63,17 +67,13 @@ public class MainActivity extends AppCompatActivity
                 new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
                 1);
 
-        // Location Provider API
-        final FusedLocationProviderClient mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        continueButton = (Button) findViewById(R.id.button_continue);
         // Volley API
-        RequestQueue queue = Volley.newRequestQueue(this);
-
+        queue = Volley.newRequestQueue(this);
         // Get views
         mainView = (View) findViewById(R.id.content_main);
         mapView =  (View) findViewById(R.id.content_map);
-        show(content.Main);
-
         // Start Button
         Button startButton = (Button) findViewById(R.id.button_start);
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -81,58 +81,10 @@ public class MainActivity extends AppCompatActivity
                 show(content.Origin);
             }
         });
-
         // Map
-        mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.content_map);
-        // When on the origin selection screen
-        originReadyCallback = new OnMapReadyCallback() {
-            @Override
-            public void onMapReady(final GoogleMap googleMap) {
-                // Check if we have permission to get GPS
-                boolean hasFineLocation = ContextCompat.checkSelfPermission(mainContext, Manifest.permission.ACCESS_FINE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED;
-                boolean hasCoarseLocation = ContextCompat.checkSelfPermission(mainContext, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED;
-                // If we have permission
-                if (hasFineLocation || hasCoarseLocation) {
-                    // Get location
-                    mFusedLocationClient.getLastLocation()
-                            .addOnSuccessListener(new OnSuccessListener<Location>() {
-                                @Override
-                                public void onSuccess(Location location) {
-                                    if (location != null) {
-                                        // Set map to center on location, zoom between city/county level
-                                        // NOTE: zoom from https://developers.google.com/maps/documentation/android-api/views#zoom
-                                        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 8));
-                                    }
-                                    // If location is null, set default
-                                    else noLocation(googleMap);
-                                }
-                            });
-                }
-                // If location access is denied, set default
-                else noLocation(googleMap);
-                // Add map markers
-                for(City city : origins) {
-                    googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
-                }
-            }
-            public void noLocation(final GoogleMap googleMap) {
-                try {
-                    Address location = new Geocoder(getApplicationContext()).getFromLocationName("Great Britain", 1).get(0);
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 5));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        };
-        originMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
-            @Override
-            public boolean onMarkerClick(Marker marker) {
-                return false;
-            }
-        };
+        mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
 
+        show(content.Main);
         // Get original locations
         MegabusAPI.getOrigins(queue, new CityCallback() {
             @Override
@@ -147,28 +99,169 @@ public class MainActivity extends AppCompatActivity
         });
     }
 
+    // Volley Request Queue
+    RequestQueue queue;
+    // Google Maps UI fragment
     SupportMapFragment mapFragment;
-    OnMapReadyCallback originReadyCallback;
-    GoogleMap.OnMarkerClickListener originMarkerClickListener;
-
-    List<City> origins;
-
-    enum content { Main, Origin };
+    // View selector
+    enum content { Main, Origin, Destination, Date };
+    content current;
+    // Views
     View mainView;
     View mapView;
+
+    // Functions for Origin selection
+    OnMapReadyCallback originReadyCallback = new OnMapReadyCallback() {
+        @Override
+        public void onMapReady(final GoogleMap googleMap) {
+            // Check if we have permission to get GPS
+            boolean hasFineLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED;
+            boolean hasCoarseLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED;
+            // If we have permission
+            if (hasFineLocation || hasCoarseLocation) {
+                // Get location
+                mFusedLocationClient.getLastLocation()
+                        .addOnSuccessListener(new OnSuccessListener<Location>() {
+                            @Override
+                            public void onSuccess(Location location) {
+                                if (location != null) {
+                                    // Set map to center on location, zoom between city/county level
+                                    // NOTE: zoom from https://developers.google.com/maps/documentation/android-api/views#zoom
+                                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 8));
+                                }
+                                // If location is null, set default
+                                else noLocation(googleMap);
+                            }
+                        });
+            }
+            // If location access is denied, set default
+            else noLocation(googleMap);
+            // Add map markers
+            for(City city : origins) {
+                Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
+                marker.setTag(city);
+            }
+            // Enable marker click listener
+            googleMap.setOnMarkerClickListener(originMarkerClickListener);
+            // Set continue button click action
+            continueButton.setOnClickListener(originContinueClickListener);
+            // Clear Location text
+            ((TextView)findViewById(R.id.map_text)).setText("");
+        }
+        public void noLocation(final GoogleMap googleMap) {
+        try {
+            Address location = new Geocoder(getApplicationContext()).getFromLocationName("Great Britain", 1).get(0);
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 5));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+};
+    GoogleMap.OnMarkerClickListener originMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
+        @Override
+        public boolean onMarkerClick(Marker marker) {
+            ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
+            ((Button)findViewById(R.id.button_continue)).setEnabled(true);
+            origin = (City)marker.getTag();
+            // Reset destination list
+            destination = null;
+            return false;
+        }
+        public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+    };
+    View.OnClickListener originContinueClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            show(content.Destination);
+        }
+    };
+    City origin;
+    List<City> origins;
+
+    // Functions for Destination selection
+    OnMapReadyCallback destinationReadyCallback = new OnMapReadyCallback() {
+        @Override
+        public void onMapReady(final GoogleMap googleMap) {
+            // Clear map markers
+            googleMap.clear();
+            // Add map markers
+            for(City city : destinations) {
+                Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
+                marker.setTag(city);
+            }
+            // Add origin marker
+            googleMap.addMarker(
+                    new MarkerOptions()
+                            .position(new LatLng(origin.latitude, origin.longitude))
+                            .title(origin.name)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+            );
+            // Enable marker click listener
+            googleMap.setOnMarkerClickListener(destinationMarkerClickListener);
+            // Set continue button click action
+            continueButton.setOnClickListener(destinationContinueClickListener);
+            // Clear Location text
+            ((TextView)findViewById(R.id.map_text)).setText("");
+        }
+        public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+    };
+    GoogleMap.OnMarkerClickListener destinationMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
+        @Override
+        public boolean onMarkerClick(Marker marker) {
+            if(Objects.equals(origin.name, marker.getTitle())) return true;
+            ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
+            ((Button)findViewById(R.id.button_continue)).setEnabled(true);
+            destination = (City)marker.getTag();
+            return false;
+        }
+        public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+    };
+    View.OnClickListener destinationContinueClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            show(content.Date);
+        }
+    };
+    City destination;
+    List<City> destinations;
+
+
 
     void show(content c) {
         mainView.setVisibility(View.INVISIBLE);
         mapView.setVisibility(View.INVISIBLE);
         switch (c) {
             case Main:
+                setTitle("Megabus");
                 mainView.setVisibility(View.VISIBLE);
                 break;
             case Origin:
+                setTitle("Select Origin");
                 mapView.setVisibility(View.VISIBLE);
                 mapFragment.getMapAsync(originReadyCallback);
                 break;
+            case Destination:
+                setTitle("Select Destination");
+                mapView.setVisibility(View.VISIBLE);
+                // Get Destinations
+                MegabusAPI.getDestinations(queue, origin.id, new CityCallback() {
+                    @Override
+                    public void onSuccess(List<City> cities) {
+                        destinations = cities;
+                        mapFragment.getMapAsync(destinationReadyCallback);
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        //TODO: Error handling
+                    }
+                });
+                break;
         }
+        // Store current page for use when going back
+        current = c;
     }
 
     @Override
@@ -176,7 +269,11 @@ public class MainActivity extends AppCompatActivity
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
-        } else {
+        } else if (current != content.Main) {
+            // Go back a page
+            show(content.values()[current.ordinal()-1]);
+        }
+        else {
             super.onBackPressed();
         }
     }
@@ -195,10 +292,9 @@ public class MainActivity extends AppCompatActivity
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
-        //if (id == R.id.action_settings) {
-        //    return true;
-        //}
+        if (id == R.id.action_search) {
+            return true;
+        }
 
         return super.onOptionsItemSelected(item);
     }
