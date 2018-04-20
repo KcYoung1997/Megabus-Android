@@ -3,7 +3,9 @@ package com.example.kcy.megabus;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Address;
 import android.location.Criteria;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
@@ -33,6 +35,7 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.tasks.OnSuccessListener;
 
+import java.io.IOException;
 import java.util.List;
 
 
@@ -80,6 +83,7 @@ public class MainActivity extends AppCompatActivity
 
         // Map
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.content_map);
+        // When on the origin selection screen
         originReadyCallback = new OnMapReadyCallback() {
             @Override
             public void onMapReady(final GoogleMap googleMap) {
@@ -88,32 +92,33 @@ public class MainActivity extends AppCompatActivity
                         == PackageManager.PERMISSION_GRANTED;
                 boolean hasCoarseLocation = ContextCompat.checkSelfPermission(mainContext, Manifest.permission.ACCESS_COARSE_LOCATION)
                         == PackageManager.PERMISSION_GRANTED;
+                // If we have permission
                 if (hasFineLocation || hasCoarseLocation) {
+                    // Get location
                     mFusedLocationClient.getLastLocation()
                             .addOnSuccessListener(new OnSuccessListener<Location>() {
                                 @Override
                                 public void onSuccess(Location location) {
-                                    // Got last known location. In some rare situations this can be null.
                                     if (location != null) {
-                                        // Logic to handle location object
-                                        googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 13));
-
-                                        CameraPosition cameraPosition = new CameraPosition.Builder()
-                                                .target(new LatLng(location.getLatitude(), location.getLongitude()))      // Sets the center of the map to location user
-                                                .zoom(17)                   // Sets the zoom
-                                                .bearing(90)                // Sets the orientation of the camera to east
-                                                .tilt(40)                   // Sets the tilt of the camera to 30 degrees
-                                                .build();                   // Creates a CameraPosition from the builder
-                                        googleMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+                                        // Set map to center on location, zoom between city/county level
+                                        // NOTE: zoom from https://developers.google.com/maps/documentation/android-api/views#zoom
+                                        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 8));
                                     }
-                                    else noLocation();
+                                    // If location is null, set default
+                                    else noLocation(googleMap);
                                 }
                             });
                 }
-                else noLocation();
+                // If location access is denied, set default
+                else noLocation(googleMap);
             }
-            public void noLocation() {
-
+            public void noLocation(final GoogleMap googleMap) {
+                try {
+                    Address location = new Geocoder(getApplicationContext()).getFromLocationName("Great Britain", 1).get(0);
+                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 5));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         };
     }
