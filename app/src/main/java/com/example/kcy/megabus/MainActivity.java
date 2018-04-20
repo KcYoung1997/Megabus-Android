@@ -4,18 +4,12 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.Address;
-import android.location.Criteria;
 import android.location.Geocoder;
 import android.location.Location;
-import android.location.LocationManager;
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
+import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
-import android.view.View;
-import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
@@ -23,16 +17,20 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
 
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 
 import java.io.IOException;
@@ -59,14 +57,17 @@ public class MainActivity extends AppCompatActivity
 
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
+
         // Ask for permissions TODO: Check first?
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
                 1);
 
+        // Location Provider API
         final FusedLocationProviderClient mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        final LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        final Criteria criteria = new Criteria();
+
+        // Volley API
+        RequestQueue queue = Volley.newRequestQueue(this);
 
         // Get views
         mainView = (View) findViewById(R.id.content_main);
@@ -111,6 +112,10 @@ public class MainActivity extends AppCompatActivity
                 }
                 // If location access is denied, set default
                 else noLocation(googleMap);
+                // Add map markers
+                for(City city : origins) {
+                    googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
+                }
             }
             public void noLocation(final GoogleMap googleMap) {
                 try {
@@ -121,11 +126,32 @@ public class MainActivity extends AppCompatActivity
                 }
             }
         };
+        originMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
+            @Override
+            public boolean onMarkerClick(Marker marker) {
+                return false;
+            }
+        };
+
+        // Get original locations
+        MegabusAPI.getOrigins(queue, new CityCallback() {
+            @Override
+            public void onSuccess(List<City> cities) {
+                origins = cities;
+            }
+            @Override
+            public void onFailure(Exception e) {
+                //TODO: Should warn about this as the app can't function without this list
+                e.printStackTrace();
+            }
+        });
     }
 
     SupportMapFragment mapFragment;
     OnMapReadyCallback originReadyCallback;
+    GoogleMap.OnMarkerClickListener originMarkerClickListener;
 
+    List<City> origins;
 
     enum content { Main, Origin };
     View mainView;
@@ -170,9 +196,9 @@ public class MainActivity extends AppCompatActivity
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
+        //if (id == R.id.action_settings) {
+        //    return true;
+        //}
 
         return super.onOptionsItemSelected(item);
     }
