@@ -1,8 +1,11 @@
 package com.example.kcy.megabus;
 
 import android.Manifest;
+import android.app.DatePickerDialog;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.icu.util.Calendar;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -72,8 +75,8 @@ public class MainActivity extends AppCompatActivity
         // Volley API
         queue = Volley.newRequestQueue(this);
         // Get views
-        mainView = (View) findViewById(R.id.content_main);
-        mapView =  (View) findViewById(R.id.content_map);
+        mainView =      findViewById(R.id.content_main);
+        mapView =       findViewById(R.id.content_map);
         // Start Button
         Button startButton = (Button) findViewById(R.id.button_start);
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -85,11 +88,14 @@ public class MainActivity extends AppCompatActivity
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
 
         show(content.Main);
+        final ProgressDialog dialog = ProgressDialog.show(this, "",
+                "Loading. Please wait...", true);
         // Get original locations
         MegabusAPI.getOrigins(queue, new CityCallback() {
             @Override
             public void onSuccess(List<City> cities) {
                 origins = cities;
+                dialog.dismiss();
             }
             @Override
             public void onFailure(Exception e) {
@@ -104,14 +110,14 @@ public class MainActivity extends AppCompatActivity
     // Google Maps UI fragment
     SupportMapFragment mapFragment;
     // View selector
-    enum content { Main, Origin, Destination, Date };
+    enum content { Loading, Main, Origin, Destination, Date };
     content current;
     // Views
     View mainView;
     View mapView;
 
     // Functions for Origin selection
-    OnMapReadyCallback originReadyCallback = new OnMapReadyCallback() {
+    OnMapReadyCallback              originReadyCallback = new OnMapReadyCallback() {
         @Override
         public void onMapReady(final GoogleMap googleMap) {
             // Check if we have permission to get GPS
@@ -171,17 +177,17 @@ public class MainActivity extends AppCompatActivity
         }
         public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
     };
-    View.OnClickListener originContinueClickListener = new View.OnClickListener() {
+    View.OnClickListener            originContinueClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View view) {
             show(content.Destination);
         }
     };
-    City origin;
-    List<City> origins;
+    City        origin;
+    List<City>  origins;
 
     // Functions for Destination selection
-    OnMapReadyCallback destinationReadyCallback = new OnMapReadyCallback() {
+    OnMapReadyCallback              destinationReadyCallback = new OnMapReadyCallback() {
         @Override
         public void onMapReady(final GoogleMap googleMap) {
             // Clear map markers
@@ -218,14 +224,14 @@ public class MainActivity extends AppCompatActivity
         }
         public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
     };
-    View.OnClickListener destinationContinueClickListener = new View.OnClickListener() {
+    View.OnClickListener            destinationContinueClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View view) {
             show(content.Date);
         }
     };
-    City destination;
-    List<City> destinations;
+    City        destination;
+    List<City>  destinations;
 
 
 
@@ -292,9 +298,6 @@ public class MainActivity extends AppCompatActivity
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        if (id == R.id.action_search) {
-            return true;
-        }
 
         return super.onOptionsItemSelected(item);
     }
