@@ -23,5 +23,6 @@
 
     <include layout="@layout/content_main" />
     <include layout="@layout/content_map" />
+    <include layout="@layout/content_date"/>
 
 </android.support.design.widget.CoordinatorLayout>

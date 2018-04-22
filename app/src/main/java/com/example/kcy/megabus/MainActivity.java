@@ -3,6 +3,7 @@ package com.example.kcy.megabus;
 import android.Manifest;
 import android.app.DatePickerDialog;
 import android.app.ProgressDialog;
+import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.icu.util.Calendar;
@@ -18,11 +19,15 @@ import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.format.DateFormat;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.DatePicker;
+import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.TimePicker;
 
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.Volley;
@@ -38,7 +43,10 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 
+import org.w3c.dom.Text;
+
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -77,6 +85,7 @@ public class MainActivity extends AppCompatActivity
         // Get views
         mainView =      findViewById(R.id.content_main);
         mapView =       findViewById(R.id.content_map);
+        dateView =      findViewById(R.id.content_date);
         // Start Button
         Button startButton = (Button) findViewById(R.id.button_start);
         startButton.setOnClickListener(new View.OnClickListener() {
@@ -103,18 +112,89 @@ public class MainActivity extends AppCompatActivity
                 e.printStackTrace();
             }
         });
+
+        Calendar calendar = Calendar.getInstance();
+        startDateText = findViewById(R.id.startDateText);
+        startDateText.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View textView) {
+                startDatePicker.show();
+            }
+        });
+        startDatePicker = new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public void onDateSet(DatePicker dateView, int year, int monthOfYear,
+                                  int dayOfMonth) {
+                Calendar c = Calendar.getInstance();
+                c.set(year, monthOfYear, dayOfMonth);
+                startDateText.setText(DateFormat.getDateFormat(getApplicationContext()).format(c.getTime()));
+            }
+            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+        },
+                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH));
+        //TODO: set bounds of dates using e.g. startDatePicker.getDatePicker().setMinDate
+        endDateText = findViewById(R.id.endDateText);
+        endDateText.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View textView) {
+                endDatePicker.show();
+            }
+        });
+        endDatePicker = new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public void onDateSet(DatePicker dateView, int year, int monthOfYear,
+                                  int dayOfMonth) {
+                Calendar c = Calendar.getInstance();
+                c.set(year, monthOfYear, dayOfMonth);
+                endDateText.setText(DateFormat.getDateFormat(getApplicationContext()).format(c.getTime()));
+            }
+            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+        },
+                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH));
+        //TODO: set bounds of dates using e.g. endDatePicker.getDatePicker().setMinDate
+
+        startTimeText = findViewById(R.id.startTimeText);
+        startTimeText.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View textView) {
+                startTimePicker.show();
+            }
+        });
+        startTimePicker = new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
+            @Override
+            public void onTimeSet(TimePicker timePicker, int hour, int minute) {
+                startTimeText.setText(""+hour+":"+minute);
+            }
+            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true);
+
     }
+    EditText            startDateText;
+    DatePickerDialog    startDatePicker;
+
+    EditText            endDateText;
+    DatePickerDialog    endDatePicker;
+
+    EditText            startTimeText;
+    TimePickerDialog    startTimePicker;
+
+    EditText            endTimeText;
+    TimePickerDialog    endTimePicker;
+
 
     // Volley Request Queue
     RequestQueue queue;
     // Google Maps UI fragment
     SupportMapFragment mapFragment;
     // View selector
-    enum content { Loading, Main, Origin, Destination, Date };
+    enum content { Main, Origin, Destination, Date };
     content current;
     // Views
     View mainView;
     View mapView;
+    View dateView;
 
     // Functions for Origin selection
     OnMapReadyCallback              originReadyCallback = new OnMapReadyCallback() {
@@ -164,7 +244,7 @@ public class MainActivity extends AppCompatActivity
             e.printStackTrace();
         }
     }
-};
+    };
     GoogleMap.OnMarkerClickListener originMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
         @Override
         public boolean onMarkerClick(Marker marker) {
@@ -233,11 +313,10 @@ public class MainActivity extends AppCompatActivity
     City        destination;
     List<City>  destinations;
 
-
-
     void show(content c) {
         mainView.setVisibility(View.INVISIBLE);
         mapView.setVisibility(View.INVISIBLE);
+        dateView.setVisibility(View.INVISIBLE);
         switch (c) {
             case Main:
                 setTitle("Megabus");
@@ -264,6 +343,10 @@ public class MainActivity extends AppCompatActivity
                         //TODO: Error handling
                     }
                 });
+                break;
+            case Date:
+                setTitle("Search Dates");
+                dateView.setVisibility(View.VISIBLE);
                 break;
         }
         // Store current page for use when going back
