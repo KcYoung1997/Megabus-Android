@@ -1,15 +1,14 @@
 package com.example.kcy.megabus;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.DatePickerDialog;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.icu.util.Calendar;
 import android.location.Address;
 import android.location.Geocoder;
-import android.location.Location;
 import android.os.Bundle;
 import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
@@ -41,15 +40,13 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.tasks.OnSuccessListener;
-
-import org.w3c.dom.Text;
 
 import java.io.IOException;
-import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
+@SuppressLint("SetTextI18n") //TODO: Localisation and Resource strings
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -61,16 +58,16 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawer.addDrawerListener(toggle);
         toggle.syncState();
 
-        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
 
         // Ask for permissions TODO: Check first?
@@ -79,20 +76,17 @@ public class MainActivity extends AppCompatActivity
                 1);
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        continueButton = (Button) findViewById(R.id.button_continue);
+        continueButton = findViewById(R.id.button_continue);
         // Volley API
         queue = Volley.newRequestQueue(this);
         // Get views
         mainView =      findViewById(R.id.content_main);
         mapView =       findViewById(R.id.content_map);
         dateView =      findViewById(R.id.content_date);
+        mapText =       findViewById(R.id.map_text);
         // Start Button
-        Button startButton = (Button) findViewById(R.id.button_start);
-        startButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                show(content.Origin);
-            }
-        });
+        Button startButton = findViewById(R.id.button_start);
+        startButton.setOnClickListener(v -> show(content.Origin));
         // Map
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
 
@@ -113,63 +107,17 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-        Calendar calendar = Calendar.getInstance();
         startDateText = findViewById(R.id.startDateText);
-        startDateText.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View textView) {
-                startDatePicker.show();
-            }
-        });
-        startDatePicker = new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
-            @Override
-            public void onDateSet(DatePicker dateView, int year, int monthOfYear,
-                                  int dayOfMonth) {
-                Calendar c = Calendar.getInstance();
-                c.set(year, monthOfYear, dayOfMonth);
-                startDateText.setText(DateFormat.getDateFormat(getApplicationContext()).format(c.getTime()));
-            }
-            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
-        },
-                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
-                calendar.get(Calendar.DAY_OF_MONTH));
-        //TODO: set bounds of dates using e.g. startDatePicker.getDatePicker().setMinDate
+        startDatePicker = TextDatePicker(startDateText, this::setStartDate);
+        //TODO: on startDateText change, set endDatePicker's range, and possibly endDateText if invalid
         endDateText = findViewById(R.id.endDateText);
-        endDateText.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View textView) {
-                endDatePicker.show();
-            }
-        });
-        endDatePicker = new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
-            @Override
-            public void onDateSet(DatePicker dateView, int year, int monthOfYear,
-                                  int dayOfMonth) {
-                Calendar c = Calendar.getInstance();
-                c.set(year, monthOfYear, dayOfMonth);
-                endDateText.setText(DateFormat.getDateFormat(getApplicationContext()).format(c.getTime()));
-            }
-            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
-        },
-                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
-                calendar.get(Calendar.DAY_OF_MONTH));
-        //TODO: set bounds of dates using e.g. endDatePicker.getDatePicker().setMinDate
+        endDatePicker = TextDatePicker(endDateText, this::setEndDate);
 
         startTimeText = findViewById(R.id.startTimeText);
-        startTimeText.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View textView) {
-                startTimePicker.show();
-            }
-        });
-        startTimePicker = new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
-            @Override
-            public void onTimeSet(TimePicker timePicker, int hour, int minute) {
-                startTimeText.setText(""+hour+":"+minute);
-            }
-            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
-        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true);
-
+        startTimePicker = TextTimePicker(startTimeText, this::setStartTime);
+        //TODO: on startTimeText change, set endTimePicker's range, and possibly endTimeText if invalid
+        endTimeText = findViewById(R.id.endTimeText);
+        endTimePicker = TextTimePicker(endTimeText, this::setEndTime);
     }
     EditText            startDateText;
     DatePickerDialog    startDatePicker;
@@ -189,29 +137,35 @@ public class MainActivity extends AppCompatActivity
     // Google Maps UI fragment
     SupportMapFragment mapFragment;
     // View selector
-    enum content { Main, Origin, Destination, Date };
+    enum content { Main, Origin, Destination, Date }
+
     content current;
     // Views
     View mainView;
     View mapView;
     View dateView;
+    TextView mapText;
 
     // Functions for Origin selection
     OnMapReadyCallback              originReadyCallback = new OnMapReadyCallback() {
         @Override
         public void onMapReady(final GoogleMap googleMap) {
-            // Check if we have permission to get GPS
-            boolean hasFineLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            boolean hasCoarseLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-            // If we have permission
-            if (hasFineLocation || hasCoarseLocation) {
-                // Get location
-                mFusedLocationClient.getLastLocation()
-                        .addOnSuccessListener(new OnSuccessListener<Location>() {
-                            @Override
-                            public void onSuccess(Location location) {
+            // Clear map markers
+            googleMap.clear();
+            if(origin != null) {
+                googleMap.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(origin.latitude, origin.longitude)));
+            }
+            else {
+                // Check if we have permission to get GPS
+                boolean hasFineLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED;
+                boolean hasCoarseLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED;
+                // If we have permission
+                if (hasFineLocation || hasCoarseLocation) {
+                    // Get location
+                    mFusedLocationClient.getLastLocation()
+                            .addOnSuccessListener(location -> {
                                 if (location != null) {
                                     // Set map to center on location, zoom between city/county level
                                     // NOTE: zoom from https://developers.google.com/maps/documentation/android-api/views#zoom
@@ -219,11 +173,11 @@ public class MainActivity extends AppCompatActivity
                                 }
                                 // If location is null, set default
                                 else noLocation(googleMap);
-                            }
-                        });
+                            });
+                }
+                // If location access is denied, set default
+                else noLocation(googleMap);
             }
-            // If location access is denied, set default
-            else noLocation(googleMap);
             // Add map markers
             for(City city : origins) {
                 Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
@@ -233,10 +187,8 @@ public class MainActivity extends AppCompatActivity
             googleMap.setOnMarkerClickListener(originMarkerClickListener);
             // Set continue button click action
             continueButton.setOnClickListener(originContinueClickListener);
-            // Clear Location text
-            ((TextView)findViewById(R.id.map_text)).setText("");
         }
-        public void noLocation(final GoogleMap googleMap) {
+        void noLocation(final GoogleMap googleMap) {
         try {
             Address location = new Geocoder(getApplicationContext()).getFromLocationName("Great Britain", 1).get(0);
             googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 5));
@@ -245,26 +197,14 @@ public class MainActivity extends AppCompatActivity
         }
     }
     };
-    GoogleMap.OnMarkerClickListener originMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
-        @Override
-        public boolean onMarkerClick(Marker marker) {
-            ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
-            ((Button)findViewById(R.id.button_continue)).setEnabled(true);
-            origin = (City)marker.getTag();
-            // Reset destination list
-            destination = null;
-            return false;
-        }
-        public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+    GoogleMap.OnMarkerClickListener originMarkerClickListener = marker -> {
+        ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
+        findViewById(R.id.button_continue).setEnabled(true);
+        setOrigin((City)marker.getTag());
+        return false;
     };
-    View.OnClickListener            originContinueClickListener = new View.OnClickListener() {
-        @Override
-        public void onClick(View view) {
-            show(content.Destination);
-        }
-    };
-    City        origin;
-    List<City>  origins;
+    View.OnClickListener            originContinueClickListener = view -> show(content.Destination); //TODO: inline
+
 
     // Functions for Destination selection
     OnMapReadyCallback              destinationReadyCallback = new OnMapReadyCallback() {
@@ -288,30 +228,21 @@ public class MainActivity extends AppCompatActivity
             googleMap.setOnMarkerClickListener(destinationMarkerClickListener);
             // Set continue button click action
             continueButton.setOnClickListener(destinationContinueClickListener);
-            // Clear Location text
-            ((TextView)findViewById(R.id.map_text)).setText("");
         }
-        public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
     };
     GoogleMap.OnMarkerClickListener destinationMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
         @Override
         public boolean onMarkerClick(Marker marker) {
             if(Objects.equals(origin.name, marker.getTitle())) return true;
             ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
-            ((Button)findViewById(R.id.button_continue)).setEnabled(true);
-            destination = (City)marker.getTag();
+            findViewById(R.id.button_continue).setEnabled(true);
+            setDestination ((City)marker.getTag());
             return false;
         }
         public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
     };
-    View.OnClickListener            destinationContinueClickListener = new View.OnClickListener() {
-        @Override
-        public void onClick(View view) {
-            show(content.Date);
-        }
-    };
-    City        destination;
-    List<City>  destinations;
+    View.OnClickListener            destinationContinueClickListener = view -> show(content.Date); //TODO: inline
+
 
     void show(content c) {
         mainView.setVisibility(View.INVISIBLE);
@@ -325,24 +256,16 @@ public class MainActivity extends AppCompatActivity
             case Origin:
                 setTitle("Select Origin");
                 mapView.setVisibility(View.VISIBLE);
+                continueButton.setEnabled(origin!=null);
+                mapText.setText(origin!=null?"Selected: " + origin.name:""); //TODO: store this
                 mapFragment.getMapAsync(originReadyCallback);
                 break;
             case Destination:
                 setTitle("Select Destination");
                 mapView.setVisibility(View.VISIBLE);
-                // Get Destinations
-                MegabusAPI.getDestinations(queue, origin.id, new CityCallback() {
-                    @Override
-                    public void onSuccess(List<City> cities) {
-                        destinations = cities;
-                        mapFragment.getMapAsync(destinationReadyCallback);
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        //TODO: Error handling
-                    }
-                });
+                continueButton.setEnabled(destination!=null);
+                mapText.setText(destination!=null?"Selected: " + destination.name:""); //TODO: store this
+                mapFragment.getMapAsync(destinationReadyCallback);
                 break;
             case Date:
                 setTitle("Search Dates");
@@ -353,9 +276,101 @@ public class MainActivity extends AppCompatActivity
         current = c;
     }
 
+    City        origin;
+    List<City>  origins;
+    void        setOrigin(City city) {
+        if(origin == city || city == null) return;
+        this.origin = city;
+        // Get Destinations
+        MegabusAPI.getDestinations(queue, origin.id, new CityCallback() {
+            @Override
+            public void onSuccess(List<City> cities) {
+                destinations = cities;
+                // If current destination set and no longer supported remove it
+                if(!destinations.contains(destination)) setDestination(null);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                //TODO: Error handling
+            }
+        });
+    }
+    City        destination;
+    List<City>  destinations;
+    void        setDestination(City city) {
+        if(destination == city  || city == null) return;
+        this.destination = city;
+        //TODO: reset date range if invalid
+    }
+    Calendar    startDate;
+    void        setStartDate(Calendar calendar) {
+        startDate = calendar;
+        startDateText.setText(DateFormat.getDateFormat(this).format(startDate.getTime()));
+
+    }
+    Calendar    endDate;
+    void        setEndDate(Calendar calendar) {
+        endDate = calendar;
+        endDateText.setText(DateFormat.getDateFormat(this).format(endDate.getTime()));
+    }
+    Calendar    startTime;
+    void setStartTime(Calendar calendar) {
+        startTime = calendar;
+        startTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+    }
+    Calendar    endTime;
+    void setEndTime(Calendar calendar) {
+        endTime = calendar;
+        endTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+    }
+
+    DatePickerDialog TextDatePicker(final EditText editText, Consumer<Calendar> setDate) {
+        Calendar calendar = Calendar.getInstance();
+        final DatePickerDialog datePickerDialog = new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
+            @Override
+            public void onDateSet(DatePicker dateView, int year, int monthOfYear,
+                                  int dayOfMonth) {
+                Calendar c = Calendar.getInstance();
+                c.set(year, monthOfYear, dayOfMonth);
+                setDate.accept(c);
+            }
+        },
+                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH));
+
+        editText.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View textView) {
+                datePickerDialog.show();
+            }
+        });
+        return datePickerDialog;
+    }
+    TimePickerDialog TextTimePicker(final EditText editText, Consumer<Calendar> setTime) {
+        Calendar calendar = Calendar.getInstance();
+        final TimePickerDialog timePickerDialog = new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
+            @Override
+            public void onTimeSet(TimePicker timePicker, int hour, int minute) {
+                Calendar c = Calendar.getInstance();
+                c.set(Calendar.HOUR_OF_DAY, hour);
+                c.set(Calendar.MINUTE, minute);
+                setTime.accept(c);
+            }
+            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true);
+        editText.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View textView) {
+                timePickerDialog.show();
+            }
+        });
+        return timePickerDialog;
+    }
+
     @Override
     public void onBackPressed() {
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
         } else if (current != content.Main) {
@@ -405,7 +420,7 @@ public class MainActivity extends AppCompatActivity
 
         }
 
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
