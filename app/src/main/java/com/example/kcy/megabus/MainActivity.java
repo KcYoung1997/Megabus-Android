@@ -5,11 +5,13 @@ import android.annotation.SuppressLint;
 import android.app.DatePickerDialog;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.icu.util.Calendar;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -44,6 +46,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+
+
 
 @SuppressLint("SetTextI18n") //TODO: Localisation and Resource strings
 public class MainActivity extends AppCompatActivity
@@ -83,6 +87,11 @@ public class MainActivity extends AppCompatActivity
         mapView =       findViewById(R.id.content_map);
         dateView =      findViewById(R.id.content_date);
         mapText =       findViewById(R.id.map_text);
+        // Navigation menu
+        navMenu =       navigationView.getMenu();
+        navMenu.findItem(R.id.nav_destination).setEnabled(false);
+        navMenu.findItem(R.id.nav_times).setEnabled(false);
+        navMenu.findItem(R.id.nav_search).setEnabled(false);
         // Start Button
         Button startButton = findViewById(R.id.button_start);
         startButton.setOnClickListener(v -> show(content.Origin));
@@ -93,6 +102,7 @@ public class MainActivity extends AppCompatActivity
         final ProgressDialog progressDialog = ProgressDialog.show(this, "",
                 "Loading. Please wait...", true);
         // Get original locations
+        Calendar tmp1 =  ResultActivity.calendarFromMillis(1524899999000L);
         MegabusAPI.getOrigins(queue, cities -> {
             origins = cities;
             progressDialog.dismiss();
@@ -136,6 +146,7 @@ public class MainActivity extends AppCompatActivity
     View mapView;
     View dateView;
     TextView mapText;
+    Menu navMenu;
 
     // Shows/hides views as required and
     // Runs logic moving between views
@@ -179,10 +190,11 @@ public class MainActivity extends AppCompatActivity
 
     City        origin;
     List<City>  origins;
-    void        setOrigin(City city) {
-        // If origin isn't changing or new origin is somehow null, return
-        if(origin == city || city == null) return;
+    void        setOrigin(@NonNull City city) {
+        // If origin isn't changing return
+        if(origin == city) return;
         this.origin = city;
+        navMenu.findItem(R.id.nav_destination).setEnabled(true);
         // Get Destinations
         MegabusAPI.getDestinations(queue, origin.id, cities -> {
             destinations = cities;
@@ -197,7 +209,17 @@ public class MainActivity extends AppCompatActivity
         if(destination == city) return;
         this.destination = city;
         // If new destination is null return
-        if(destination == null) return;
+        if(destination == null)
+        {
+            navMenu.findItem(R.id.nav_times).setEnabled(false);
+            navMenu.findItem(R.id.nav_search).setEnabled(false);
+            return;
+        }
+        navMenu.findItem(R.id.nav_times).setEnabled(true);
+        // startDate will be set to current day if null
+        // endDate will be set to startDate if null
+        // Times are optional
+        navMenu.findItem(R.id.nav_search).setEnabled(true);
         // Get travel dates
         MegabusAPI.getTravelDates(queue, origin.id, destination.id, (newStart, newEnd) -> {
             // If start date now invalid
@@ -222,44 +244,48 @@ public class MainActivity extends AppCompatActivity
         startDate = calendar;
         if(calendar != null) {
             // If new start after current end, reset end
-            if(startDate.after(endDate)) setEndDate(null);
+            if(endDate!=null && startDate.after(endDate)) setEndDate(null);
             // Display date
             startDateText.setText(DateFormat.getDateFormat(this).format(startDate.getTime()));
         } else {
             // If new calendar is null, reset text display
             startDateText.setText("");
+            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
     Calendar    endDate;
     void        setEndDate(Calendar calendar) {
         endDate = calendar;
         if(calendar != null) {
-            if(endDate.before(startDate)) setStartDate(null);
+            if(startDate!=null && endDate.before(startDate)) setStartDate(null);
             endDateText.setText(DateFormat.getDateFormat(this).format(endDate.getTime()));
         } else {
             endDateText.setText("");
+            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
     Calendar    startTime;
     @SuppressLint("DefaultLocale") // Locale should not effect format due to only using Int printing
-    void setStartTime(Calendar calendar) {
+    void        setStartTime(Calendar calendar) {
         startTime = calendar;
         if(calendar != null) {
-            if(startTime.after(endTime)) setEndTime(null);
-            startTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+            if(endTime!=null && startTime.after(endTime)) setEndTime(null);
+            startTimeText.setText(String.format("%02d:%02d", startTime.get(Calendar.HOUR_OF_DAY), startTime.get(Calendar.MINUTE)));
         } else {
             startTimeText.setText("");
+            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
     Calendar    endTime;
     @SuppressLint("DefaultLocale") // Locale should not effect format due to only using Int printing
-    void setEndTime(Calendar calendar) {
+    void        setEndTime(Calendar calendar) {
         endTime = calendar;
         if(calendar != null) {
-            if(endTime.before(startTime)) setStartTime(null);
-            endTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+            if(startTime!=null && endTime.before(startTime)) setStartTime(null);
+            endTimeText.setText(String.format("%02d:%02d", endTime.get(Calendar.HOUR_OF_DAY), endTime.get(Calendar.MINUTE)));
         } else {
             endTimeText.setText("");
+            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
 
@@ -289,65 +315,37 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onBackPressed() {
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        // If drawer is open, close it
-        if (drawer.isDrawerOpen(GravityCompat.START)) {
-            drawer.closeDrawer(GravityCompat.START);
-        }
-        // If were not already on the first page
-        else if (current != content.Main) {
-            // Go back a page
-            show(content.values()[current.ordinal()-1]);
-        }
-        // Super (close the app)
-        else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    public boolean onNavigationItemSelected(MenuItem item) {
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         // Handle navigation view item clicks here.
         int id = item.getItemId();
-
-        if (id == R.id.nav_camera) {
-            // Handle the camera action
-        } else if (id == R.id.nav_gallery) {
-
-        } else if (id == R.id.nav_slideshow) {
-
-        } else if (id == R.id.nav_manage) {
-
-        } else if (id == R.id.nav_share) {
-
-        } else if (id == R.id.nav_send) {
-
+        switch (id) {
+            case R.id.nav_home:
+                show(content.Main); break;
+            case R.id.nav_origin:
+                show(content.Origin); break;
+            case R.id.nav_destination:
+                show(content.Destination); break;
+            case R.id.nav_times:
+                show(content.Date); break;
+            case R.id.nav_search:
+                Intent intent = new Intent(this, ResultActivity.class);
+                intent.putExtra("Origin", origin.id);
+                intent.putExtra("Destination", destination.id);
+                if(startDate!=null)
+                    intent.putExtra("StartDate", startDate.getTimeInMillis());
+                if(endDate!=null)
+                    intent.putExtra("EndDate", endDate.getTimeInMillis());
+                if(startTime!=null)
+                    intent.putExtra("StartTime", startTime.getTimeInMillis());
+                if(endTime!=null)
+                    intent.putExtra("EndTime", endTime.getTimeInMillis());
+                startActivity(intent);
+                break;
         }
-
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
-
 
     // Functions for Origin selection
     GoogleMap.OnMarkerClickListener originMarkerClickListener = marker -> {
@@ -432,6 +430,6 @@ public class MainActivity extends AppCompatActivity
         // Enable marker click listener
         googleMap.setOnMarkerClickListener(destinationMarkerClickListener);
         // Set continue button click action
-        continueButton.setOnClickListener(view -> show(content.Destination));
+        continueButton.setOnClickListener(view -> show(content.Date));
     };
 }
