@@ -17,6 +17,7 @@ import java.lang.reflect.Type;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
@@ -36,7 +37,9 @@ interface JourneyCallback {
 }
 
 class MegabusAPI {
+    static private SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
     class Journey {
+
         class City {
             String cityName;
             short cityId;
@@ -55,7 +58,9 @@ class MegabusAPI {
         }
         int journeyId;
         String departureDateTime;
+        Date departure() throws ParseException { return format.parse(departureDateTime); }
         String arrivalDateTime;
+        Date arrival() throws ParseException { return format.parse(arrivalDateTime); }
         String duration;
         float price;
         City origin;

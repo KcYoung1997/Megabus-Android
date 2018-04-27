@@ -98,11 +98,16 @@ public class MainActivity extends AppCompatActivity
         // Map
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
 
+        //TODO: remove, testing code
+        Intent intent = new Intent(this, ResultActivity.class);
+        intent.putExtra("Origin", 32);
+        intent.putExtra("Destination", 38);
+        startActivity(intent);
+
         show(content.Main);
         final ProgressDialog progressDialog = ProgressDialog.show(this, "",
                 "Loading. Please wait...", true);
         // Get original locations
-        Calendar tmp1 =  ResultActivity.calendarFromMillis(1524899999000L);
         MegabusAPI.getOrigins(queue, cities -> {
             origins = cities;
             progressDialog.dismiss();
@@ -110,13 +115,11 @@ public class MainActivity extends AppCompatActivity
 
         startDateText = findViewById(R.id.startDateText);
         startDatePicker = TextDatePicker(startDateText, this::setStartDate);
-        //TODO: on startDateText change, set endDatePicker's range, and possibly endDateText if invalid
         endDateText = findViewById(R.id.endDateText);
         endDatePicker = TextDatePicker(endDateText, this::setEndDate);
 
         startTimeText = findViewById(R.id.startTimeText);
         startTimePicker = TextTimePicker(startTimeText, this::setStartTime);
-        //TODO: on startTimeText change, set endTimePicker's range, and possibly endTimeText if invalid
         endTimeText = findViewById(R.id.endTimeText);
         endTimePicker = TextTimePicker(endTimeText, this::setEndTime);
     }
