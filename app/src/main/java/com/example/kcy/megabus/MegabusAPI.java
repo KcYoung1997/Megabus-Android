@@ -1,76 +1,79 @@
 package com.example.kcy.megabus;
 
-import android.support.v4.util.Pair;
-
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
 
-interface CityCallback {
-    void onSuccess(List<City> cities);
+interface ErrorCallback {
     void onFailure(Exception e);
 }
 
-public class MegabusAPI {
-    public static final String baseURL =    "https://uk.megabus.com";
-    public static final String originURL =  baseURL+"/journey-planner/api/origin-cities";
-    public static final String destURL(int origin) { return baseURL+"/journey-planner/api/destination-cities?originCityId=" + origin; }
-    public static final String journeyURL = baseURL+"/journey-planner/api/journeys";
+interface CityCallback {
+    void onSuccess(List<City> cities);
+}
+interface TravelDatesCallback {
+    void onSuccess(Calendar start, Calendar end);
+}
+
+class MegabusAPI {
+    private static final String baseURL =    "https://uk.megabus.com";
+    private static final String originURL =  baseURL+"/journey-planner/api/origin-cities";
+    private static       String destURL(int origin) { return baseURL+"/journey-planner/api/destination-cities?originCityId=" + origin; }
+    private static       String journeyURL(int origin, int destination) { return baseURL+"/journey-planner/api/journeys/travel-dates?originCityId="+origin+"&destinationCityId="+destination; };
 
 
-    static public void getOrigins(RequestQueue queue, final CityCallback callback) {
+    static void getOrigins(RequestQueue queue, CityCallback callback, ErrorCallback errorCallback) {
         StringRequest stringRequest = new StringRequest(Request.Method.GET, originURL,
-            new Response.Listener<String>() {
-                @Override
-                public void onResponse(String response) {
+                response -> {
                     // Get Cities Array
                     JsonArray arr = ((JsonObject)new JsonParser().parse(response)).getAsJsonArray("cities");
                     // Parse as City List
                     List<City> origins = new Gson().fromJson(arr, new TypeToken<List<City>>() {}.getType());
                     callback.onSuccess(origins);
-                }
-            }, new Response.ErrorListener() {
-                @Override
-                public void onErrorResponse(VolleyError error) {
-                    callback.onFailure(error);
-                }
-        });
+                }, errorCallback::onFailure);
         // Add the request to the RequestQueue.
         queue.add(stringRequest);
     }
-    static public void getDestinations(RequestQueue queue, int origin, final CityCallback callback) {
-        String url = destURL(origin);
+    static void getDestinations(RequestQueue queue, int origin, final CityCallback callback, ErrorCallback errorCallback) {
         StringRequest stringRequest = new StringRequest(Request.Method.GET, destURL(origin),
-                new Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
-                        // Get Cities Array
-                        JsonArray arr = ((JsonObject)new JsonParser().parse(response)).getAsJsonArray("cities");
-                        // Parse as City List
-                        List<City> destinations = new Gson().fromJson(arr, new TypeToken<List<City>>() {}.getType());
-                        callback.onSuccess(destinations);
+                response -> {
+                    // Get Cities Array
+                    JsonArray arr = ((JsonObject)new JsonParser().parse(response)).getAsJsonArray("cities");
+                    // Parse as City List
+                    List<City> destinations = new Gson().fromJson(arr, new TypeToken<List<City>>() {}.getType());
+                    callback.onSuccess(destinations);
+                }, errorCallback::onFailure);
+        queue.add(stringRequest);
+    }
+    static void getTravelDates(RequestQueue queue, int origin, int destination, final TravelDatesCallback callback, ErrorCallback errorCallback) {
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, journeyURL(origin, destination),
+                response -> {
+                    Calendar start = Calendar.getInstance();
+                    Calendar end = Calendar.getInstance();
+                    // Get Cities Array
+                    JsonArray arr = ((JsonObject)new JsonParser().parse(response)).getAsJsonArray("availableDates");
+                    List<String> dates = new Gson().fromJson(arr, new TypeToken<List<String>>() {}.getType());
+
+                    SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH);
+                    try {
+                        start.setTime(format.parse(dates.get(0)));
+                        end.setTime(format.parse(dates.get(dates.size()-1)));
+                    } catch (ParseException e) {
+                        errorCallback.onFailure(e);
                     }
-                }, new Response.ErrorListener() {
-            @Override
-            public void onErrorResponse(VolleyError error) {
-                callback.onFailure(error);
-            }
-        });
+                    callback.onSuccess(start, end);
+                }, errorCallback::onFailure);
         queue.add(stringRequest);
     }
 }

@@ -23,10 +23,9 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
-import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.TimePicker;
+import android.widget.Toast;
 
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.Volley;
@@ -70,7 +69,7 @@ public class MainActivity extends AppCompatActivity
         NavigationView navigationView = findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
 
-        // Ask for permissions TODO: Check first?
+        // Ask for permissions
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
                 1);
@@ -91,21 +90,13 @@ public class MainActivity extends AppCompatActivity
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
 
         show(content.Main);
-        final ProgressDialog dialog = ProgressDialog.show(this, "",
+        final ProgressDialog progressDialog = ProgressDialog.show(this, "",
                 "Loading. Please wait...", true);
         // Get original locations
-        MegabusAPI.getOrigins(queue, new CityCallback() {
-            @Override
-            public void onSuccess(List<City> cities) {
-                origins = cities;
-                dialog.dismiss();
-            }
-            @Override
-            public void onFailure(Exception e) {
-                //TODO: Should warn about this as the app can't function without this list
-                e.printStackTrace();
-            }
-        });
+        MegabusAPI.getOrigins(queue, cities -> {
+            origins = cities;
+            progressDialog.dismiss();
+        }, error -> {/*TODO*/});
 
         startDateText = findViewById(R.id.startDateText);
         startDatePicker = TextDatePicker(startDateText, this::setStartDate);
@@ -146,104 +137,8 @@ public class MainActivity extends AppCompatActivity
     View dateView;
     TextView mapText;
 
-    // Functions for Origin selection
-    OnMapReadyCallback              originReadyCallback = new OnMapReadyCallback() {
-        @Override
-        public void onMapReady(final GoogleMap googleMap) {
-            // Clear map markers
-            googleMap.clear();
-            if(origin != null) {
-                googleMap.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(origin.latitude, origin.longitude)));
-            }
-            else {
-                // Check if we have permission to get GPS
-                boolean hasFineLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED;
-                boolean hasCoarseLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
-                        == PackageManager.PERMISSION_GRANTED;
-                // If we have permission
-                if (hasFineLocation || hasCoarseLocation) {
-                    // Get location
-                    mFusedLocationClient.getLastLocation()
-                            .addOnSuccessListener(location -> {
-                                if (location != null) {
-                                    // Set map to center on location, zoom between city/county level
-                                    // NOTE: zoom from https://developers.google.com/maps/documentation/android-api/views#zoom
-                                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 8));
-                                }
-                                // If location is null, set default
-                                else noLocation(googleMap);
-                            });
-                }
-                // If location access is denied, set default
-                else noLocation(googleMap);
-            }
-            // Add map markers
-            for(City city : origins) {
-                Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
-                marker.setTag(city);
-            }
-            // Enable marker click listener
-            googleMap.setOnMarkerClickListener(originMarkerClickListener);
-            // Set continue button click action
-            continueButton.setOnClickListener(originContinueClickListener);
-        }
-        void noLocation(final GoogleMap googleMap) {
-        try {
-            Address location = new Geocoder(getApplicationContext()).getFromLocationName("Great Britain", 1).get(0);
-            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 5));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-    };
-    GoogleMap.OnMarkerClickListener originMarkerClickListener = marker -> {
-        ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
-        findViewById(R.id.button_continue).setEnabled(true);
-        setOrigin((City)marker.getTag());
-        return false;
-    };
-    View.OnClickListener            originContinueClickListener = view -> show(content.Destination); //TODO: inline
-
-
-    // Functions for Destination selection
-    OnMapReadyCallback              destinationReadyCallback = new OnMapReadyCallback() {
-        @Override
-        public void onMapReady(final GoogleMap googleMap) {
-            // Clear map markers
-            googleMap.clear();
-            // Add map markers
-            for(City city : destinations) {
-                Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
-                marker.setTag(city);
-            }
-            // Add origin marker
-            googleMap.addMarker(
-                    new MarkerOptions()
-                            .position(new LatLng(origin.latitude, origin.longitude))
-                            .title(origin.name)
-                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
-            );
-            // Enable marker click listener
-            googleMap.setOnMarkerClickListener(destinationMarkerClickListener);
-            // Set continue button click action
-            continueButton.setOnClickListener(destinationContinueClickListener);
-        }
-    };
-    GoogleMap.OnMarkerClickListener destinationMarkerClickListener = new GoogleMap.OnMarkerClickListener() {
-        @Override
-        public boolean onMarkerClick(Marker marker) {
-            if(Objects.equals(origin.name, marker.getTitle())) return true;
-            ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
-            findViewById(R.id.button_continue).setEnabled(true);
-            setDestination ((City)marker.getTag());
-            return false;
-        }
-        public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
-    };
-    View.OnClickListener            destinationContinueClickListener = view -> show(content.Date); //TODO: inline
-
-
+    // Shows/hides views as required and
+    // Runs logic moving between views
     void show(content c) {
         mainView.setVisibility(View.INVISIBLE);
         mapView.setVisibility(View.INVISIBLE);
@@ -256,15 +151,21 @@ public class MainActivity extends AppCompatActivity
             case Origin:
                 setTitle("Select Origin");
                 mapView.setVisibility(View.VISIBLE);
+                // If we have a previous origin selected, enable continue
                 continueButton.setEnabled(origin!=null);
-                mapText.setText(origin!=null?"Selected: " + origin.name:""); //TODO: store this
+                // If we have a previous origin selected, display name
+                mapText.setText(origin!=null?"Selected: " + origin.name:"");
+                // Load map and run origin logic
                 mapFragment.getMapAsync(originReadyCallback);
                 break;
             case Destination:
                 setTitle("Select Destination");
                 mapView.setVisibility(View.VISIBLE);
+                // If we have a previous destination selected, enable continue
                 continueButton.setEnabled(destination!=null);
-                mapText.setText(destination!=null?"Selected: " + destination.name:""); //TODO: store this
+                // If we have a previous destination selected, display name
+                mapText.setText(destination!=null?"Selected: " + destination.name:"");
+                // Load map and run destination logic
                 mapFragment.getMapAsync(destinationReadyCallback);
                 break;
             case Date:
@@ -279,104 +180,127 @@ public class MainActivity extends AppCompatActivity
     City        origin;
     List<City>  origins;
     void        setOrigin(City city) {
+        // If origin isn't changing or new origin is somehow null, return
         if(origin == city || city == null) return;
         this.origin = city;
         // Get Destinations
-        MegabusAPI.getDestinations(queue, origin.id, new CityCallback() {
-            @Override
-            public void onSuccess(List<City> cities) {
-                destinations = cities;
-                // If current destination set and no longer supported remove it
-                if(!destinations.contains(destination)) setDestination(null);
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                //TODO: Error handling
-            }
-        });
+        MegabusAPI.getDestinations(queue, origin.id, cities -> {
+            destinations = cities;
+            // If current destination set and no longer supported remove it
+            if(!destinations.contains(destination)) setDestination(null);
+        }, e -> Toast.makeText(this, "Unable to get destinations for " + origin.name + " please try again later", Toast.LENGTH_LONG).show());
     }
     City        destination;
     List<City>  destinations;
     void        setDestination(City city) {
-        if(destination == city  || city == null) return;
+        // If destination isn't changing return
+        if(destination == city) return;
         this.destination = city;
-        //TODO: reset date range if invalid
+        // If new destination is null return
+        if(destination == null) return;
+        // Get travel dates
+        MegabusAPI.getTravelDates(queue, origin.id, destination.id, (newStart, newEnd) -> {
+            // If start date now invalid
+            if(startDate != null && newStart.after(startDate)) {
+                // Remove start date
+                setStartDate(null);
+            }
+            // If end date now invalid
+            if(endDate != null && newEnd.after(endDate)) {
+                // Remove end date
+                setEndDate(null);
+            }
+            //Set valid date ranges
+            startDatePicker.getDatePicker().setMinDate(newStart.getTimeInMillis());
+            endDatePicker.getDatePicker().setMinDate(newStart.getTimeInMillis());
+            startDatePicker.getDatePicker().setMaxDate(newEnd.getTimeInMillis());
+            endDatePicker.getDatePicker().setMaxDate(newEnd.getTimeInMillis());
+        }, e -> {/*TODO*/});
     }
     Calendar    startDate;
     void        setStartDate(Calendar calendar) {
         startDate = calendar;
-        startDateText.setText(DateFormat.getDateFormat(this).format(startDate.getTime()));
-
+        if(calendar != null) {
+            // If new start after current end, reset end
+            if(startDate.after(endDate)) setEndDate(null);
+            // Display date
+            startDateText.setText(DateFormat.getDateFormat(this).format(startDate.getTime()));
+        } else {
+            // If new calendar is null, reset text display
+            startDateText.setText("");
+        }
     }
     Calendar    endDate;
     void        setEndDate(Calendar calendar) {
         endDate = calendar;
-        endDateText.setText(DateFormat.getDateFormat(this).format(endDate.getTime()));
+        if(calendar != null) {
+            if(endDate.before(startDate)) setStartDate(null);
+            endDateText.setText(DateFormat.getDateFormat(this).format(endDate.getTime()));
+        } else {
+            endDateText.setText("");
+        }
     }
     Calendar    startTime;
+    @SuppressLint("DefaultLocale") // Locale should not effect format due to only using Int printing
     void setStartTime(Calendar calendar) {
         startTime = calendar;
-        startTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+        if(calendar != null) {
+            if(startTime.after(endTime)) setEndTime(null);
+            startTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+        } else {
+            startTimeText.setText("");
+        }
     }
     Calendar    endTime;
+    @SuppressLint("DefaultLocale") // Locale should not effect format due to only using Int printing
     void setEndTime(Calendar calendar) {
         endTime = calendar;
-        endTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+        if(calendar != null) {
+            if(endTime.before(startTime)) setStartTime(null);
+            endTimeText.setText(String.format("%02d:%02d", Calendar.HOUR_OF_DAY, Calendar.MINUTE));
+        } else {
+            endTimeText.setText("");
+        }
     }
 
+    // Helper functions to create Pickers tied to EditTexts
     DatePickerDialog TextDatePicker(final EditText editText, Consumer<Calendar> setDate) {
         Calendar calendar = Calendar.getInstance();
-        final DatePickerDialog datePickerDialog = new DatePickerDialog(this, new DatePickerDialog.OnDateSetListener() {
-            @Override
-            public void onDateSet(DatePicker dateView, int year, int monthOfYear,
-                                  int dayOfMonth) {
-                Calendar c = Calendar.getInstance();
-                c.set(year, monthOfYear, dayOfMonth);
-                setDate.accept(c);
-            }
+        final DatePickerDialog datePickerDialog = new DatePickerDialog(this, (dateView, year, monthOfYear, dayOfMonth) -> {
+            Calendar c = Calendar.getInstance();
+            c.set(year, monthOfYear, dayOfMonth);
+            setDate.accept(c);
         },
                 calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
                 calendar.get(Calendar.DAY_OF_MONTH));
-
-        editText.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View textView) {
-                datePickerDialog.show();
-            }
-        });
+        editText.setOnClickListener(textView -> datePickerDialog.show());
         return datePickerDialog;
     }
     TimePickerDialog TextTimePicker(final EditText editText, Consumer<Calendar> setTime) {
         Calendar calendar = Calendar.getInstance();
-        final TimePickerDialog timePickerDialog = new TimePickerDialog(this, new TimePickerDialog.OnTimeSetListener() {
-            @Override
-            public void onTimeSet(TimePicker timePicker, int hour, int minute) {
-                Calendar c = Calendar.getInstance();
-                c.set(Calendar.HOUR_OF_DAY, hour);
-                c.set(Calendar.MINUTE, minute);
-                setTime.accept(c);
-            }
-            public void test(){} //TODO: remove this in final build, just used to force android studio to collapse properly
+        final TimePickerDialog timePickerDialog = new TimePickerDialog(this, (timePicker, hour, minute) -> {
+            Calendar c = Calendar.getInstance();
+            c.set(Calendar.HOUR_OF_DAY, hour);
+            c.set(Calendar.MINUTE, minute);
+            setTime.accept(c);
         }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true);
-        editText.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View textView) {
-                timePickerDialog.show();
-            }
-        });
+        editText.setOnClickListener(textView -> timePickerDialog.show());
         return timePickerDialog;
     }
 
     @Override
     public void onBackPressed() {
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        // If drawer is open, close it
         if (drawer.isDrawerOpen(GravityCompat.START)) {
             drawer.closeDrawer(GravityCompat.START);
-        } else if (current != content.Main) {
+        }
+        // If were not already on the first page
+        else if (current != content.Main) {
             // Go back a page
             show(content.values()[current.ordinal()-1]);
         }
+        // Super (close the app)
         else {
             super.onBackPressed();
         }
@@ -400,7 +324,6 @@ public class MainActivity extends AppCompatActivity
         return super.onOptionsItemSelected(item);
     }
 
-    @SuppressWarnings("StatementWithEmptyBody")
     @Override
     public boolean onNavigationItemSelected(MenuItem item) {
         // Handle navigation view item clicks here.
@@ -424,4 +347,91 @@ public class MainActivity extends AppCompatActivity
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
+
+
+    // Functions for Origin selection
+    GoogleMap.OnMarkerClickListener originMarkerClickListener = marker -> {
+        ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
+        findViewById(R.id.button_continue).setEnabled(true);
+        setOrigin((City)marker.getTag());
+        return false;
+    };
+    @SuppressLint("MissingPermission") // NOTE: There is an incorrect permission assumption for mFusedLocationClient.getLastLocation()
+    OnMapReadyCallback              originReadyCallback = googleMap ->  {
+        // Clear map markers
+        googleMap.clear();
+        if(origin != null) {
+            googleMap.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(origin.latitude, origin.longitude)));
+        }
+        else {
+            // Check if we have permission to get GPS
+            boolean hasFineLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED;
+            boolean hasCoarseLocation = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED;
+            // If we have permission
+            if (hasFineLocation || hasCoarseLocation) {
+                // Get location
+                mFusedLocationClient.getLastLocation()
+                        .addOnSuccessListener(location -> {
+                            if (location != null) {
+                                // Set map to center on location, zoom between city/county level
+                                // NOTE: zoom from https://developers.google.com/maps/documentation/android-api/views#zoom
+                                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 8));
+                            }
+                            // If location is null, set default
+                            else noLocation(googleMap);
+                        });
+            }
+            // If location access is denied, set default
+            else noLocation(googleMap);
+        }
+        // Add map markers
+        for(City city : origins) {
+            Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
+            marker.setTag(city);
+        }
+        // Enable marker click listener
+        googleMap.setOnMarkerClickListener(originMarkerClickListener);
+        // Set continue button click action
+        continueButton.setOnClickListener(view -> show(content.Destination));
+    };
+    void noLocation(final GoogleMap googleMap) {
+        try {
+            Address location = new Geocoder(getApplicationContext()).getFromLocationName("Great Britain", 1).get(0);
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 5));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    // Functions for Destination selection
+    GoogleMap.OnMarkerClickListener destinationMarkerClickListener = marker ->{
+        if(Objects.equals(origin.name, marker.getTitle())) return true;
+        ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
+        findViewById(R.id.button_continue).setEnabled(true);
+        setDestination ((City)marker.getTag());
+        return false;
+    };
+    OnMapReadyCallback              destinationReadyCallback = googleMap ->  {
+        // Clear map markers
+        googleMap.clear();
+        // Add map markers
+        for(City city : destinations) {
+            Marker marker = googleMap.addMarker(new MarkerOptions().position(new LatLng(city.latitude, city.longitude)).title(city.name));
+            marker.setTag(city);
+        }
+        // Add origin marker
+        googleMap.addMarker(
+                new MarkerOptions()
+                        .position(new LatLng(origin.latitude, origin.longitude))
+                        .title(origin.name)
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+        );
+        // Enable marker click listener
+        googleMap.setOnMarkerClickListener(destinationMarkerClickListener);
+        // Set continue button click action
+        continueButton.setOnClickListener(view -> show(content.Destination));
+    };
 }
