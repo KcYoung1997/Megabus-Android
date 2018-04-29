@@ -2,6 +2,7 @@ package com.example.kcy.megabus;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
@@ -51,11 +52,30 @@ import java.util.function.Consumer;
 
 
 
-@SuppressLint("SetTextI18n") //TODO: Localisation and Resource strings
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
-
+    // Volley Request Queue
+    RequestQueue queue;
+    // Google Maps UI fragment
+    SupportMapFragment mapFragment;
+    // View selector
+    enum content { Main, Origin, Destination, Date }
+    content current;
+    // Views
+    View mainView;
+    View mapView;
+    View dateView;
+    TextView mapText;
+    Menu navMenu;
     Button continueButton;
+    EditText            startDateText;
+    DatePickerDialog    startDatePicker;
+    EditText            endDateText;
+    DatePickerDialog    endDatePicker;
+    EditText            startTimeText;
+    TimePickerDialog    startTimePicker;
+    EditText            endTimeText;
+    TimePickerDialog    endTimePicker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -106,58 +126,101 @@ public class MainActivity extends AppCompatActivity
         findViewById(R.id.button_start).setOnClickListener(v -> show(content.Origin));
         // Show home screen
         show(content.Main);
-        new Thread(() -> {
-            final ConnectivityManager connectivityManager = ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE));
-            try {
-                if(connectivityManager.getActiveNetworkInfo() == null || !connectivityManager.getActiveNetworkInfo().isConnected() ||  InetAddress.getByName("google.com").equals("") ) {
-                    runOnUiThread(() -> Toast.makeText(getApplicationContext(), "Internet Connection Is Required", Toast.LENGTH_LONG).show());
-                }
-            } catch (UnknownHostException e) {
-                e.printStackTrace();
-            }
-        }).start();
+        // Error messages
+        AlertDialog noInternetDialog = new AlertDialog.Builder(this)
+                .setMessage("No internet connection found. Connect to the internet and try again.")
+                .setNegativeButton("Retry", (dialog, id) -> {
+                    // Since we're at the start of the activity, just recreate
+                    recreate();
+                }).setPositiveButton("Ignore", null).create();
+        AlertDialog noOriginDialog = new AlertDialog.Builder(this)
+                .setMessage("Could not get station information. Check internet connection and try again.")
+                .setNegativeButton("Retry", (dialog, id) -> {
+                    // Since we're at the start of the activity, just recreate
+                    recreate();
+                }).setPositiveButton("Exit", (dialog, id ) -> finish()).create();
 
         // Show loading dialog until origin locations are loaded
         final ProgressDialog progressDialog = ProgressDialog.show(this, "",
                 "Loading. Please wait...", true);
-        // Get original locations
-        MegabusAPI.getOrigins(queue, cities -> {
-            origins = cities;
-            progressDialog.dismiss();
-        }, error -> {/*TODO*/});
+        new Thread(() -> {
+            final ConnectivityManager connectivityManager = ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE));
+            try {
+                // If we don't have internet
+                if(connectivityManager == null ||
+                        connectivityManager.getActiveNetworkInfo() == null ||
+                        !connectivityManager.getActiveNetworkInfo().isConnected() ||
+                        InetAddress.getByName("google.com") == null ) {
+                    // Alert the user
+                    runOnUiThread(noInternetDialog::show);
+                } else {
+                    // If we have internet
+                    // Get original locations
+                    MegabusAPI.getOrigins(queue, cities -> {
+                        progressDialog.dismiss();
+                        origins = cities;
+                    }, error -> {
+                        progressDialog.dismiss();
+                        runOnUiThread(noOriginDialog::show);
+                    });
+                }
+            } catch (UnknownHostException e) {
+                runOnUiThread(noInternetDialog::show);
+            }
+        }).start();
     }
     // onStart/Pause/Resume is not needed
     // application doesn't need to handle a returning user
-    // application doesn't
-
-    EditText            startDateText;
-    DatePickerDialog    startDatePicker;
-
-    EditText            endDateText;
-    DatePickerDialog    endDatePicker;
-
-    EditText            startTimeText;
-    TimePickerDialog    startTimePicker;
-
-    EditText            endTimeText;
-    TimePickerDialog    endTimePicker;
-
-
-    // Volley Request Queue
-    RequestQueue queue;
-    // Google Maps UI fragment
-    SupportMapFragment mapFragment;
-    // View selector
-    enum content { Main, Origin, Destination, Date }
-
-    content current;
-    // Views
-    View mainView;
-    View mapView;
-    View dateView;
-    TextView mapText;
-    Menu navMenu;
-
+    // application doesn't hold resources
+    @Override
+    public void onBackPressed() {
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        // If drawer is open, close it
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+        }
+        // If were not already on the first page
+        else if (current != content.Main) {
+            // Go back a page
+            show(content.values()[current.ordinal()-1]);
+        }
+        // Super (close the app)
+        else {
+            super.onBackPressed();
+        }
+    }
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        // Handle navigation view item clicks here.
+        int id = item.getItemId();
+        switch (id) {
+            case R.id.nav_home:
+                show(content.Main); break;
+            case R.id.nav_origin:
+                show(content.Origin); break;
+            case R.id.nav_destination:
+                show(content.Destination); break;
+            case R.id.nav_times:
+                show(content.Date); break;
+            case R.id.nav_search:
+                Intent intent = new Intent(this, ResultActivity.class);
+                intent.putExtra("Origin", origin.id);
+                intent.putExtra("Destination", destination.id);
+                if(startDate!=null)
+                    intent.putExtra("StartDate", startDate.getTimeInMillis());
+                if(endDate!=null)
+                    intent.putExtra("EndDate", endDate.getTimeInMillis());
+                if(startTime!=null)
+                    intent.putExtra("StartTime", startTime.getTimeInMillis());
+                if(endTime!=null)
+                    intent.putExtra("EndTime", endTime.getTimeInMillis());
+                startActivity(intent);
+                break;
+        }
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        drawer.closeDrawer(GravityCompat.START);
+        return true;
+    }
     // Shows/hides views as required and
     // Runs logic moving between views
     void show(content c) {
@@ -198,37 +261,19 @@ public class MainActivity extends AppCompatActivity
         current = c;
     }
 
-    @Override
-    public void onBackPressed() {
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        // If drawer is open, close it
-        if (drawer.isDrawerOpen(GravityCompat.START)) {
-            drawer.closeDrawer(GravityCompat.START);
-        }
-        // If were not already on the first page
-        else if (current != content.Main) {
-            // Go back a page
-            show(content.values()[current.ordinal()-1]);
-        }
-        // Super (close the app)
-        else {
-            super.onBackPressed();
-        }
-    }
-
     City        origin;
     List<City>  origins;
     void        setOrigin(@NonNull City city) {
         // If origin isn't changing return
         if(origin == city) return;
         this.origin = city;
-        navMenu.findItem(R.id.nav_destination).setEnabled(true);
         // Get Destinations
         MegabusAPI.getDestinations(queue, origin.id, cities -> {
+            navMenu.findItem(R.id.nav_destination).setEnabled(true);
             destinations = cities;
             // If current destination set and no longer supported remove it
             if(!destinations.contains(destination)) setDestination(null);
-        }, e -> Toast.makeText(this, "Unable to get destinations for " + origin.name + " please try again later", Toast.LENGTH_LONG).show());
+        }, e -> Toast.makeText(this, "Unable to get destinations for " + origin.name + ", please try again later", Toast.LENGTH_LONG).show());
     }
     City        destination;
     List<City>  destinations;
@@ -265,7 +310,7 @@ public class MainActivity extends AppCompatActivity
             endDatePicker.getDatePicker().setMinDate(newStart.getTimeInMillis());
             startDatePicker.getDatePicker().setMaxDate(newEnd.getTimeInMillis());
             endDatePicker.getDatePicker().setMaxDate(newEnd.getTimeInMillis());
-        }, e -> {/*TODO*/});
+        }, e -> Toast.makeText(this, "Unable to get travel dates for " + origin.name + "to " + destination.name + ", please try again later", Toast.LENGTH_LONG).show());
     }
     Calendar    startDate;
     void        setStartDate(Calendar calendar) {
@@ -317,64 +362,6 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    // Helper functions to create Pickers tied to EditTexts
-    DatePickerDialog TextDatePicker(final EditText editText, Consumer<Calendar> setDate) {
-        Calendar calendar = Calendar.getInstance();
-        final DatePickerDialog datePickerDialog = new DatePickerDialog(this, (dateView, year, monthOfYear, dayOfMonth) -> {
-            Calendar c = Calendar.getInstance();
-            c.set(year, monthOfYear, dayOfMonth);
-            setDate.accept(c);
-        },
-                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
-                calendar.get(Calendar.DAY_OF_MONTH));
-        editText.setOnClickListener(textView -> datePickerDialog.show());
-        return datePickerDialog;
-    }
-    TimePickerDialog TextTimePicker(final EditText editText, Consumer<Calendar> setTime) {
-        Calendar calendar = Calendar.getInstance();
-        final TimePickerDialog timePickerDialog = new TimePickerDialog(this, (timePicker, hour, minute) -> {
-            Calendar c = Calendar.getInstance();
-            c.set(Calendar.HOUR_OF_DAY, hour);
-            c.set(Calendar.MINUTE, minute);
-            setTime.accept(c);
-        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true);
-        editText.setOnClickListener(textView -> timePickerDialog.show());
-        return timePickerDialog;
-    }
-
-    @Override
-    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        // Handle navigation view item clicks here.
-        int id = item.getItemId();
-        switch (id) {
-            case R.id.nav_home:
-                show(content.Main); break;
-            case R.id.nav_origin:
-                show(content.Origin); break;
-            case R.id.nav_destination:
-                show(content.Destination); break;
-            case R.id.nav_times:
-                show(content.Date); break;
-            case R.id.nav_search:
-                Intent intent = new Intent(this, ResultActivity.class);
-                intent.putExtra("Origin", origin.id);
-                intent.putExtra("Destination", destination.id);
-                if(startDate!=null)
-                    intent.putExtra("StartDate", startDate.getTimeInMillis());
-                if(endDate!=null)
-                    intent.putExtra("EndDate", endDate.getTimeInMillis());
-                if(startTime!=null)
-                    intent.putExtra("StartTime", startTime.getTimeInMillis());
-                if(endTime!=null)
-                    intent.putExtra("EndTime", endTime.getTimeInMillis());
-                startActivity(intent);
-                break;
-        }
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        drawer.closeDrawer(GravityCompat.START);
-        return true;
-    }
-
     // Functions for Origin selection
     GoogleMap.OnMarkerClickListener originMarkerClickListener = marker -> {
         ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
@@ -383,7 +370,7 @@ public class MainActivity extends AppCompatActivity
         return false;
     };
     @SuppressLint("MissingPermission") // NOTE: There is an incorrect permission assumption for mFusedLocationClient.getLastLocation()
-    OnMapReadyCallback              originReadyCallback = googleMap ->  {
+            OnMapReadyCallback              originReadyCallback = googleMap ->  {
         // Clear map markers
         googleMap.clear();
         if(origin != null) {
@@ -430,8 +417,6 @@ public class MainActivity extends AppCompatActivity
             e.printStackTrace();
         }
     }
-
-
     // Functions for Destination selection
     GoogleMap.OnMarkerClickListener destinationMarkerClickListener = marker ->{
         if(Objects.equals(origin.name, marker.getTitle())) return true;
@@ -460,4 +445,29 @@ public class MainActivity extends AppCompatActivity
         // Set continue button click action
         continueButton.setOnClickListener(view -> show(content.Date));
     };
+
+    // Helper functions to create Pickers tied to EditTexts
+    DatePickerDialog TextDatePicker(final EditText editText, Consumer<Calendar> setDate) {
+        Calendar calendar = Calendar.getInstance();
+        final DatePickerDialog datePickerDialog = new DatePickerDialog(this, (dateView, year, monthOfYear, dayOfMonth) -> {
+            Calendar c = Calendar.getInstance();
+            c.set(year, monthOfYear, dayOfMonth);
+            setDate.accept(c);
+        },
+                calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH));
+        editText.setOnClickListener(textView -> datePickerDialog.show());
+        return datePickerDialog;
+    }
+    TimePickerDialog TextTimePicker(final EditText editText, Consumer<Calendar> setTime) {
+        Calendar calendar = Calendar.getInstance();
+        final TimePickerDialog timePickerDialog = new TimePickerDialog(this, (timePicker, hour, minute) -> {
+            Calendar c = Calendar.getInstance();
+            c.set(Calendar.HOUR_OF_DAY, hour);
+            c.set(Calendar.MINUTE, minute);
+            setTime.accept(c);
+        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true);
+        editText.setOnClickListener(textView -> timePickerDialog.show());
+        return timePickerDialog;
+    }
 }
