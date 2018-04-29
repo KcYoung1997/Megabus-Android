@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.icu.util.Calendar;
 import android.location.Address;
 import android.location.Geocoder;
+import android.net.ConnectivityManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
@@ -31,7 +32,6 @@ import android.widget.Toast;
 
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.Volley;
-import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -43,6 +43,8 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -53,8 +55,6 @@ import java.util.function.Consumer;
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
 
-    // Location Provider API
-    FusedLocationProviderClient mFusedLocationClient;
     Button continueButton;
 
     @Override
@@ -78,7 +78,6 @@ public class MainActivity extends AppCompatActivity
                 new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
                 1);
 
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         continueButton = findViewById(R.id.button_continue);
         // Volley API
         queue = Volley.newRequestQueue(this);
@@ -92,20 +91,33 @@ public class MainActivity extends AppCompatActivity
         navMenu.findItem(R.id.nav_destination).setEnabled(false);
         navMenu.findItem(R.id.nav_times).setEnabled(false);
         navMenu.findItem(R.id.nav_search).setEnabled(false);
-        // Start Button
-        Button startButton = findViewById(R.id.button_start);
-        startButton.setOnClickListener(v -> show(content.Origin));
         // Map
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-
-        //TODO: remove, testing code
-        Intent intent = new Intent(this, ResultActivity.class);
-        intent.putExtra("Origin", 32);
-        intent.putExtra("Destination", 38);
-        intent.putExtra("StartDate", Calendar.getInstance().getTimeInMillis()+999999999L);
-        startActivity(intent);
-
+        // Pickers
+        startDateText = findViewById(R.id.startDateText);
+        startDatePicker = TextDatePicker(startDateText, this::setStartDate);
+        endDateText = findViewById(R.id.endDateText);
+        endDatePicker = TextDatePicker(endDateText, this::setEndDate);
+        startTimeText = findViewById(R.id.startTimeText);
+        startTimePicker = TextTimePicker(startTimeText, this::setStartTime);
+        endTimeText = findViewById(R.id.endTimeText);
+        endTimePicker = TextTimePicker(endTimeText, this::setEndTime);
+        // Start Button
+        findViewById(R.id.button_start).setOnClickListener(v -> show(content.Origin));
+        // Show home screen
         show(content.Main);
+        new Thread(() -> {
+            final ConnectivityManager connectivityManager = ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE));
+            try {
+                if(connectivityManager.getActiveNetworkInfo() == null || !connectivityManager.getActiveNetworkInfo().isConnected() ||  InetAddress.getByName("google.com").equals("") ) {
+                    runOnUiThread(() -> Toast.makeText(getApplicationContext(), "Internet Connection Is Required", Toast.LENGTH_LONG).show());
+                }
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+        }).start();
+
+        // Show loading dialog until origin locations are loaded
         final ProgressDialog progressDialog = ProgressDialog.show(this, "",
                 "Loading. Please wait...", true);
         // Get original locations
@@ -113,17 +125,11 @@ public class MainActivity extends AppCompatActivity
             origins = cities;
             progressDialog.dismiss();
         }, error -> {/*TODO*/});
-
-        startDateText = findViewById(R.id.startDateText);
-        startDatePicker = TextDatePicker(startDateText, this::setStartDate);
-        endDateText = findViewById(R.id.endDateText);
-        endDatePicker = TextDatePicker(endDateText, this::setEndDate);
-
-        startTimeText = findViewById(R.id.startTimeText);
-        startTimePicker = TextTimePicker(startTimeText, this::setStartTime);
-        endTimeText = findViewById(R.id.endTimeText);
-        endTimePicker = TextTimePicker(endTimeText, this::setEndTime);
     }
+    // onStart/Pause/Resume is not needed
+    // application doesn't need to handle a returning user
+    // application doesn't
+
     EditText            startDateText;
     DatePickerDialog    startDatePicker;
 
@@ -190,6 +196,24 @@ public class MainActivity extends AppCompatActivity
         }
         // Store current page for use when going back
         current = c;
+    }
+
+    @Override
+    public void onBackPressed() {
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
+        // If drawer is open, close it
+        if (drawer.isDrawerOpen(GravityCompat.START)) {
+            drawer.closeDrawer(GravityCompat.START);
+        }
+        // If were not already on the first page
+        else if (current != content.Main) {
+            // Go back a page
+            show(content.values()[current.ordinal()-1]);
+        }
+        // Super (close the app)
+        else {
+            super.onBackPressed();
+        }
     }
 
     City        origin;
@@ -374,7 +398,7 @@ public class MainActivity extends AppCompatActivity
             // If we have permission
             if (hasFineLocation || hasCoarseLocation) {
                 // Get location
-                mFusedLocationClient.getLastLocation()
+                LocationServices.getFusedLocationProviderClient(this).getLastLocation()
                         .addOnSuccessListener(location -> {
                             if (location != null) {
                                 // Set map to center on location, zoom between city/county level
