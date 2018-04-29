@@ -8,6 +8,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
 import com.android.volley.AuthFailureError;
 import com.android.volley.Header;
@@ -70,12 +71,16 @@ public class PurchaseActivity extends AppCompatActivity {
             e.printStackTrace();
         }
         RequestQueue queue = Volley.newRequestQueue(this);
-        Request request = new JsonObjectRequest(
+        JsonObjectRequest request = new JsonObjectRequest(
                 Request.Method.POST,
                 "https://uk.megabus.com/journey-planner/api/basket/add",
                 json,
         response -> runOnUiThread(() -> webView.loadUrl("https://uk.megabus.com/journey-planner/basket")),
-        error -> error.printStackTrace())
+        error -> {
+            Toast.makeText(this, "Unable to order a ticket, please try again.", Toast.LENGTH_SHORT).show();
+            // Return to results activity
+            finish();
+        })
         {
             @Override public Map<String, String> getHeaders() throws AuthFailureError {
                 Map<String, String>  params = new HashMap<>();

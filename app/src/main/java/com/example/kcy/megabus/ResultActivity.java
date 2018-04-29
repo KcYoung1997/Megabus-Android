@@ -1,10 +1,12 @@
 package com.example.kcy.megabus;
 
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.icu.util.Calendar;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.view.ContextThemeWrapper;
@@ -27,6 +29,7 @@ import com.google.gson.Gson;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.List;
+import java.util.Locale;
 
 import static java.lang.Math.toIntExact;
 
@@ -34,20 +37,10 @@ import static java.lang.Math.toIntExact;
 public class ResultActivity extends AppCompatActivity {
     private class JourneyAdapter extends ArrayAdapter<Journey> {
         private List<Journey> journeys;
-        private LayoutInflater inflater = null;
-        private Context context;
 
-        public JourneyAdapter (Context context, int textViewResourceId, List<Journey> journeys) {
+        JourneyAdapter(Context context, int textViewResourceId, List<Journey> journeys) {
             super(context, textViewResourceId, journeys);
-            try {
-                this.context = context;
-                this.journeys = journeys;
-
-                inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-
-            } catch (Exception e) {
-
-            }
+            this.journeys = journeys;
         }
 
         public int getCount() {
@@ -58,18 +51,15 @@ public class ResultActivity extends AppCompatActivity {
             return journeys.get(position);
         }
 
-        public long getItemId(Journey journey) {
-            return journeys.indexOf(journey);
-        }
-
-        SimpleDateFormat inputTimeFormat = new SimpleDateFormat("HH:mm:ss");
-        SimpleDateFormat timeFormat = new SimpleDateFormat("H:mm");
-        public View getView(int position, View convertView, ViewGroup parent) {
+        SimpleDateFormat inputTimeFormat = new SimpleDateFormat("HH:mm:ss", Locale.US);
+        SimpleDateFormat timeFormat = new SimpleDateFormat("H:mm", Locale.US);
+        @NonNull
+        public View getView(int position, View convertView, @NonNull ViewGroup parent) {
             View v = convertView;
             if(v == null) {
                 LayoutInflater vi;
                 vi = LayoutInflater.from(getContext());
-                v = vi.inflate(R.layout.result_item, null);
+                v = vi.inflate(R.layout.result_item, parent, false);
             }
             Journey j = getItem(position);
 
@@ -91,7 +81,7 @@ public class ResultActivity extends AppCompatActivity {
                 }
                 try {
                     travel_times.setText(
-                            String.format("%s → %s (%02d:%02d)",
+                            String.format(Locale.US, "%s → %s (%02d:%02d)",
                                     timeFormat.format(inputTimeFormat.parse(j.departureDateTime.split("T")[1])),
                                     timeFormat.format(inputTimeFormat.parse(j.arrivalDateTime.split("T")[1])),
                                     hours,
@@ -99,11 +89,10 @@ public class ResultActivity extends AppCompatActivity {
                 } catch (ParseException e) {
                     e.printStackTrace();
                 }
-                //TODO from API's parsed dates
                 travel_date.setText(j.departureDateTime.split("T")[0]);
-                origin.setText(j.legs.get(0).origin.cityName + ", " + j.legs.get(0).origin.stopName);
-                destination.setText(j.legs.get(j.legs.size()-1).destination.cityName + ", " + j.legs.get(j.legs.size()-1).destination.stopName);
-                price.setText(String.format("£%02.2f", j.price));
+                origin.setText(String.format(Locale.US, "%s, %s", j.legs.get(0).origin.cityName, j.legs.get(0).origin.stopName));
+                destination.setText(String.format(Locale.US, "%s, %s", j.legs.get(0).destination.cityName, j.legs.get(0).destination.stopName));
+                price.setText(String.format(Locale.US, "£%02.2f", j.price));
             }
             return v;
         }
@@ -118,6 +107,7 @@ public class ResultActivity extends AppCompatActivity {
 
     ListView list;
     Intent createIntent;
+    AlertDialog noResultDialog;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -127,6 +117,14 @@ public class ResultActivity extends AppCompatActivity {
         list.setOnItemClickListener(listClick);
         // Get contents of search
         createIntent = getIntent();
+        // Define error message
+        noResultDialog = new AlertDialog.Builder(this)
+                .setMessage("Could not get results. Check internet connection and try again.")
+                .setNegativeButton("Retry", (dialog, id) -> {
+                    // Since we're at the start of the activity, just recreate
+                    recreate();
+                })
+                .setPositiveButton("Go Back", (dialog, id ) -> finish()).create();
         // Set refresh pull listener
         SwipeRefreshLayout refreshLayout = findViewById(R.id.swiperefresh);
         refreshLayout.setOnRefreshListener(
@@ -156,19 +154,37 @@ public class ResultActivity extends AppCompatActivity {
 
         MegabusAPI.getJourneys(Volley.newRequestQueue(this), origin, destination, startDate, endDate, startTime, endTime, j -> {
             progressDialog.dismiss();
-            //TODO order price by default
+            // Remove any journeys who depart after startTime
+            if(startTime != null) {
+                j.removeIf(x -> {
+                    int departHour = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[0]);
+                    int departMin = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[1]);
+
+                    return (departHour < startTime.get(Calendar.HOUR_OF_DAY) ||
+                            (departHour == startTime.get(Calendar.HOUR_OF_DAY) && departMin < startTime.get(Calendar.MINUTE)));
+                });
+            }
+            // Remove any journeys who depart after endTime
+            if(endTime != null) {
+                j.removeIf(x -> {
+                    int arriveHour = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[0]);
+                    int arriveMin = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[1]);
+
+                    return (arriveHour > endTime.get(Calendar.HOUR_OF_DAY) ||
+                            (arriveHour == endTime.get(Calendar.HOUR_OF_DAY) && arriveMin > endTime.get(Calendar.MINUTE)));
+                });
+            }
             runOnUiThread(() -> {
                 JourneyAdapter adapter = new JourneyAdapter(this, R.id.result_item, j);
                 list.setAdapter(adapter);
                 onContentChanged();
             });
-        }, e -> {/*TODO*/});
+        }, e -> noResultDialog.show());
     }
-
 
     ListView.OnItemClickListener listClick = (adapterView, view, pos, id) -> {
         Intent intent = new Intent(this, PurchaseActivity.class);
-        intent.putExtra("journey", (new Gson()).toJson((Journey)adapterView.getItemAtPosition(pos)));
+        intent.putExtra("journey", (new Gson()).toJson(adapterView.getItemAtPosition(pos)));
         startActivity(intent);
     };
 
@@ -194,8 +210,8 @@ public class ResultActivity extends AppCompatActivity {
         // Set to display "None"
         spin.setSelection(adapter.getCount());
         // On option selected
-        //TODO: store previous selection to avoid pointless ordering
         spin.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            //NOTE: this is not called when the item selected is not changed
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int pos, long id) {
                 // If adapter not set, then list is not populated yet and we should not order

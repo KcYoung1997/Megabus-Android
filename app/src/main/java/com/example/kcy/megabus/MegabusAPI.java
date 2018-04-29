@@ -37,7 +37,7 @@ interface JourneyCallback {
 }
 
 class MegabusAPI {
-    static private SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+    static private SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
     class Journey {
 
         class City {

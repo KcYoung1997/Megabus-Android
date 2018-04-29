@@ -50,7 +50,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-
+//TODO: globally fix issues highlighted by suppressed linter messages
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
@@ -323,7 +323,6 @@ public class MainActivity extends AppCompatActivity
         } else {
             // If new calendar is null, reset text display
             startDateText.setText("");
-            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
     Calendar    endDate;
@@ -334,7 +333,6 @@ public class MainActivity extends AppCompatActivity
             endDateText.setText(DateFormat.getDateFormat(this).format(endDate.getTime()));
         } else {
             endDateText.setText("");
-            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
     Calendar    startTime;
@@ -346,7 +344,6 @@ public class MainActivity extends AppCompatActivity
             startTimeText.setText(String.format("%02d:%02d", startTime.get(Calendar.HOUR_OF_DAY), startTime.get(Calendar.MINUTE)));
         } else {
             startTimeText.setText("");
-            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
     Calendar    endTime;
@@ -358,14 +355,15 @@ public class MainActivity extends AppCompatActivity
             endTimeText.setText(String.format("%02d:%02d", endTime.get(Calendar.HOUR_OF_DAY), endTime.get(Calendar.MINUTE)));
         } else {
             endTimeText.setText("");
-            navMenu.findItem(R.id.nav_search).setEnabled(false);
         }
     }
 
     // Functions for Origin selection
+    @SuppressLint("SetTextI18n")
     GoogleMap.OnMarkerClickListener originMarkerClickListener = marker -> {
         ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
         findViewById(R.id.button_continue).setEnabled(true);
+        assert marker.getTag() != null; // Tag should never be null as it is always set at marker creation
         setOrigin((City)marker.getTag());
         return false;
     };
@@ -418,6 +416,7 @@ public class MainActivity extends AppCompatActivity
         }
     }
     // Functions for Destination selection
+    @SuppressLint("SetTextI18n")
     GoogleMap.OnMarkerClickListener destinationMarkerClickListener = marker ->{
         if(Objects.equals(origin.name, marker.getTitle())) return true;
         ((TextView)findViewById(R.id.map_text)).setText("Selected: " + marker.getTitle());
