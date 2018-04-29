@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.icu.util.Calendar;
 import android.os.Bundle;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -116,6 +117,7 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     ListView list;
+    Intent createIntent;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -124,13 +126,30 @@ public class ResultActivity extends AppCompatActivity {
         list = findViewById(R.id.list);
         list.setOnItemClickListener(listClick);
         // Get contents of search
-        Intent intent = getIntent();
-        int origin =        intent.getIntExtra("Origin", -1);
-        int destination =   intent.getIntExtra("Destination", -1);
-        Calendar startDate = calendarFromMillis(intent.getLongExtra("StartDate", -1));
-        Calendar endDate = calendarFromMillis(intent.getLongExtra("EndDate", -1));
-        Calendar startTime =       calendarFromMillis(intent.getLongExtra("StartTime", -1));
-        Calendar endTime =      calendarFromMillis(intent.getLongExtra("EndTime", -1));
+        createIntent = getIntent();
+        // Set refresh pull listener
+        SwipeRefreshLayout refreshLayout = findViewById(R.id.swiperefresh);
+        refreshLayout.setOnRefreshListener(
+                () -> {
+                    refreshJourneys();
+                    refreshLayout.setRefreshing(false);
+                }
+        );
+    }
+    // Price grabbing is done in onResume in order to keep prices up to date when reentering the activity
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshJourneys();
+    }
+
+    void refreshJourneys() {
+        int origin =        createIntent.getIntExtra("Origin", -1);
+        int destination =   createIntent.getIntExtra("Destination", -1);
+        Calendar startDate = calendarFromMillis(createIntent.getLongExtra("StartDate", -1));
+        Calendar endDate = calendarFromMillis(createIntent.getLongExtra("EndDate", -1));
+        Calendar startTime =       calendarFromMillis(createIntent.getLongExtra("StartTime", -1));
+        Calendar endTime =      calendarFromMillis(createIntent.getLongExtra("EndTime", -1));
 
         final ProgressDialog progressDialog = ProgressDialog.show(this, "",
                 "Loading. Please wait...", true);
@@ -146,13 +165,14 @@ public class ResultActivity extends AppCompatActivity {
         }, e -> {/*TODO*/});
     }
 
+
     ListView.OnItemClickListener listClick = (adapterView, view, pos, id) -> {
         Intent intent = new Intent(this, PurchaseActivity.class);
         intent.putExtra("journey", (new Gson()).toJson((Journey)adapterView.getItemAtPosition(pos)));
         startActivity(intent);
     };
 
-    final static String[] options =  new String[] {"Price", "Departure Time", "Arrival Time", "Travel Duration"};
+    final static String[] options =  new String[] {"Price", "Departure Time", "Arrival Time", "Travel Duration", "None"};
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate menu
@@ -161,9 +181,18 @@ public class ResultActivity extends AppCompatActivity {
         // Get spinner
         Spinner spin = (Spinner) menu.findItem(R.id.action_spinner).getActionView();
         // Create an adapter, themed to fit the appbar, using android provided layout, and static string options
-        SpinnerAdapter adapter = new ArrayAdapter<>(new ContextThemeWrapper(this, R.style.AppTheme_AppBarOverlay), R.layout.support_simple_spinner_dropdown_item, options);
+        SpinnerAdapter adapter = new ArrayAdapter<String>(new ContextThemeWrapper(this, R.style.AppTheme_AppBarOverlay), R.layout.support_simple_spinner_dropdown_item, options) {
+            // Override getCount to not display the "None" option in the list
+            @Override
+            public int getCount() {
+                int count = super.getCount();
+                return count > 0 ? count - 1 : count;
+            }
+        };
         // Set spinner to use adapter
         spin.setAdapter(adapter);
+        // Set to display "None"
+        spin.setSelection(adapter.getCount());
         // On option selected
         //TODO: store previous selection to avoid pointless ordering
         spin.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
