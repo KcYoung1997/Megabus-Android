@@ -5,8 +5,6 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.webkit.CookieManager;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -17,7 +15,6 @@ import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
-import com.android.volley.VolleyLog;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.gson.Gson;
@@ -53,23 +50,17 @@ public class PurchaseActivity extends AppCompatActivity {
         webView.getSettings().setDatabaseEnabled(true);
         webView.getSettings().setAppCacheEnabled(true);
         webView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                Map<String, String> requestHeaders = request.getRequestHeaders();
-                return super.shouldInterceptRequest(view, request);
-            }
-        });
+        webView.setWebViewClient(new WebViewClient());
         cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
         // Removes cookie policy warning on megabus's site
         cookieManager.setCookie("https://uk.megabus.com", "AcceptedCookiePolicy=");
+        // Don't run networking on UI thread
         new Thread(this::getBasket).start();
     }
 
     void getBasket() {
-        // Get WebView
 
         String postData = "{\"journeys\":[{\"journeyId\":\"" + journey.journeyId + "\",\"passengerCount\":1,\"concessionCount\":0,\"nusCount\":0,\"otherDisabilityCount\":0,\"wheelchairSeatedCount\":0,\"pcaCount\":0}]}";
         JSONObject json = null;
@@ -83,11 +74,9 @@ public class PurchaseActivity extends AppCompatActivity {
                 Request.Method.POST,
                 "https://uk.megabus.com/journey-planner/api/basket/add",
                 json,
-        response -> {
-            runOnUiThread(() -> webView.loadUrl("https://uk.megabus.com/journey-planner/basket"));
-        }, error -> {
-            error.printStackTrace();
-        }) {
+        response -> runOnUiThread(() -> webView.loadUrl("https://uk.megabus.com/journey-planner/basket")),
+        error -> error.printStackTrace())
+        {
             @Override public Map<String, String> getHeaders() throws AuthFailureError {
                 Map<String, String>  params = new HashMap<>();
                 params.put("referer", "https://uk.megabus.com/journey-planner/journeys/return");
@@ -119,54 +108,6 @@ public class PurchaseActivity extends AppCompatActivity {
             }
         };
         queue.add(request);
-    }
-
-
-
-    private void logToCurlRequest(Request<?> request) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("curl request: curl ");
-        builder.append("-X \"");
-        switch (request.getMethod()) {
-            case Request.Method.POST:
-                builder.append("POST");
-                break;
-            case Request.Method.GET:
-                builder.append("GET");
-                break;
-            case Request.Method.PUT:
-                builder.append("PUT");
-                break;
-            case Request.Method.DELETE:
-                builder.append("DELETE");
-                break;
-        }
-        builder.append("\"");
-
-        try {
-            if (request.getBody() != null) {
-                builder.append(" -D ");
-                String data = new String(request.getBody());
-                data = data.replaceAll("\"", "\\\"");
-                builder.append("\"");
-                builder.append(data);
-                builder.append("\"");
-            }
-            for (String key : request.getHeaders().keySet()) {
-                builder.append(" -H '");
-                builder.append(key);
-                builder.append(": ");
-                builder.append(request.getHeaders().get(key));
-                builder.append("'");
-            }
-            builder.append(" \"");
-            builder.append(request.getUrl());
-            builder.append("\"");
-            String log = builder.toString();
-            VolleyLog.v(log);
-        } catch (AuthFailureError e) {
-            VolleyLog.wtf("Unable to get body of response or headers for curl logging");
-        }
     }
 }
 
