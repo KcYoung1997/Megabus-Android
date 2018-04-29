@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_marginTop="8dp"
-            android:text="09:45 → 11:15 (1h 30m)"
+            tools:text="09:45 → 11:15 (1h 30m)"
             android:textAppearance="@android:style/TextAppearance.Material.Medium"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
@@ -38,7 +38,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
-            android:text="£13.20"
+            tools:text="£13.20"
             android:textAppearance="@style/TextAppearance.AppCompat.Headline"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="@+id/travel_times" />
@@ -48,7 +48,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Dundee, Segate Bus Station"
+            tools:text="Dundee, Segate Bus Station"
             app:layout_constraintStart_toStartOf="@+id/travel_times"
             app:layout_constraintTop_toBottomOf="@+id/travel_times" />
 
@@ -56,7 +56,7 @@
             android:id="@+id/destination"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="To Edinburgh, Bus Station"
+            tools:text="To Edinburgh, Bus Station"
             app:layout_constraintStart_toStartOf="@+id/travel_times"
             app:layout_constraintTop_toBottomOf="@+id/origin" />
 
@@ -64,7 +64,7 @@
             android:id="@+id/travel_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="14/04/18"
+            tools:text="14/04/18"
             app:layout_constraintBottom_toBottomOf="@+id/destination"
             app:layout_constraintEnd_toEndOf="@+id/price" />
 
