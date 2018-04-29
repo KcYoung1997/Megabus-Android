@@ -137,10 +137,12 @@ public class ResultActivity extends AppCompatActivity {
 
         MegabusAPI.getJourneys(Volley.newRequestQueue(this), origin, destination, startDate, endDate, startTime, endTime, j -> {
             progressDialog.dismiss();
-            JourneyAdapter adapter = new JourneyAdapter(this, R.id.result_item, j);
-            list.setAdapter(adapter);
             //TODO order price by default
-            runOnUiThread(this::onContentChanged);
+            runOnUiThread(() -> {
+                JourneyAdapter adapter = new JourneyAdapter(this, R.id.result_item, j);
+                list.setAdapter(adapter);
+                onContentChanged();
+            });
         }, e -> {/*TODO*/});
     }
 

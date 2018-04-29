@@ -102,6 +102,7 @@ public class MainActivity extends AppCompatActivity
         Intent intent = new Intent(this, ResultActivity.class);
         intent.putExtra("Origin", 32);
         intent.putExtra("Destination", 38);
+        intent.putExtra("StartDate", Calendar.getInstance().getTimeInMillis()+999999999L);
         startActivity(intent);
 
         show(content.Main);
