@@ -124,6 +124,8 @@ public class MainActivity extends AppCompatActivity
         endTimePicker = TextTimePicker(endTimeText, this::setEndTime);
         // Start Button
         findViewById(R.id.button_start).setOnClickListener(v -> show(content.Origin));
+        // Search Button
+        findViewById(R.id.button_search).setOnClickListener(v -> search());
         // Show home screen
         show(content.Main);
         // Error messages
@@ -203,18 +205,7 @@ public class MainActivity extends AppCompatActivity
             case R.id.nav_times:
                 show(content.Date); break;
             case R.id.nav_search:
-                Intent intent = new Intent(this, ResultActivity.class);
-                intent.putExtra("Origin", origin.id);
-                intent.putExtra("Destination", destination.id);
-                if(startDate!=null)
-                    intent.putExtra("StartDate", startDate.getTimeInMillis());
-                if(endDate!=null)
-                    intent.putExtra("EndDate", endDate.getTimeInMillis());
-                if(startTime!=null)
-                    intent.putExtra("StartTime", startTime.getTimeInMillis());
-                if(endTime!=null)
-                    intent.putExtra("EndTime", endTime.getTimeInMillis());
-                startActivity(intent);
+                search();
                 break;
         }
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
@@ -259,6 +250,20 @@ public class MainActivity extends AppCompatActivity
         }
         // Store current page for use when going back
         current = c;
+    }
+    void search() {
+        Intent intent = new Intent(this, ResultActivity.class);
+        intent.putExtra("Origin", origin.id);
+        intent.putExtra("Destination", destination.id);
+        if(startDate!=null)
+            intent.putExtra("StartDate", startDate.getTimeInMillis());
+        if(endDate!=null)
+            intent.putExtra("EndDate", endDate.getTimeInMillis());
+        if(startTime!=null)
+            intent.putExtra("StartTime", startTime.getTimeInMillis());
+        if(endTime!=null)
+            intent.putExtra("EndTime", endTime.getTimeInMillis());
+        startActivity(intent);
     }
 
     City        origin;
