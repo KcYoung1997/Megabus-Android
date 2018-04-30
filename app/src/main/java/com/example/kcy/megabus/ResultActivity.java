@@ -21,6 +21,7 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.android.volley.toolbox.Volley;
 import com.example.kcy.megabus.MegabusAPI.Journey;
@@ -157,8 +158,9 @@ public class ResultActivity extends AppCompatActivity {
             // Remove any journeys who depart after startTime
             if(startTime != null) {
                 j.removeIf(x -> {
-                    int departHour = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[0]);
-                    int departMin = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[1]);
+                    String[] departTime = x.departureDateTime.split("T")[1].split(":");
+                    int departHour = Integer.parseInt(departTime[0]);
+                    int departMin = Integer.parseInt(departTime[1]);
 
                     return (departHour < startTime.get(Calendar.HOUR_OF_DAY) ||
                             (departHour == startTime.get(Calendar.HOUR_OF_DAY) && departMin < startTime.get(Calendar.MINUTE)));
@@ -167,14 +169,25 @@ public class ResultActivity extends AppCompatActivity {
             // Remove any journeys who depart after endTime
             if(endTime != null) {
                 j.removeIf(x -> {
-                    int arriveHour = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[0]);
-                    int arriveMin = Integer.parseInt(x.departureDateTime.split(";")[1].split(":")[1]);
+                    String[] arriveTime = x.arrivalDateTime.split("T")[1].split(":");
+                    int arriveHour = Integer.parseInt(arriveTime[0]);
+                    int arriveMin = Integer.parseInt(arriveTime[1]);
 
                     return (arriveHour > endTime.get(Calendar.HOUR_OF_DAY) ||
                             (arriveHour == endTime.get(Calendar.HOUR_OF_DAY) && arriveMin > endTime.get(Calendar.MINUTE)));
                 });
             }
             runOnUiThread(() -> {
+                // If no journeys were found
+                if(j.size() == 0) {
+                    // Warn
+                    Toast.makeText(this, "No journeys found. Edit your search and try again.", Toast.LENGTH_SHORT).show();
+                    // Return to MainActivity
+                    finish();
+                }
+                // If we're refreshing, reset the spinner
+                // TODO: try and reapply the sort on refresh
+                ((Spinner)findViewById(R.id.action_spinner)).setSelection(options.length-1);
                 JourneyAdapter adapter = new JourneyAdapter(this, R.id.result_item, j);
                 list.setAdapter(adapter);
                 onContentChanged();
@@ -183,6 +196,7 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     ListView.OnItemClickListener listClick = (adapterView, view, pos, id) -> {
+        //TODO: ask for passenger count
         Intent intent = new Intent(this, PurchaseActivity.class);
         intent.putExtra("journey", (new Gson()).toJson(adapterView.getItemAtPosition(pos)));
         startActivity(intent);
